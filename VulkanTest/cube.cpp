@@ -2698,12 +2698,15 @@ struct Demo {
     uint32_t queue_family_count;
 };
 
+#define ENBALE_GLFW //glfw
+
 #if _WIN32
 // Include header required for parsing the command line options.
 #include <shellapi.h>
 
 Demo demo;
 
+#ifndef ENBALE_GLFW
 // MS-Windows event handling function:
 LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
     switch (uMsg) {
@@ -2732,9 +2735,13 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
 
     return (DefWindowProc(hWnd, uMsg, wParam, lParam));
 }
+#endif
 
-int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR pCmdLine,
-                   int nCmdShow) {
+#include "glfwmanager.h"
+
+int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR pCmdLine, int nCmdShow)
+{
+
     // TODO: Gah.. refactor. This isn't 1989.
     MSG msg;   // message
     bool done; // flag saying when app is complete
@@ -2786,11 +2793,36 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR pCmdLine,
 
     demo.connection = hInstance;
     strncpy(demo.name, "cube", APP_NAME_STR_LEN);
+
+#ifdef ENBALE_GLFW
+    int w = 512;
+    int h = 512;
+
+    GlfwManager glfw;
+    if (!glfw.initilize()) {
+        return 1;
+    }
+    if (!glfw.createWindow(w, h, "Hello vulkan")) {
+        return 2;
+    }
+    demo.window = glfw.getWindow();
+
+#else
     demo.create_window();
+#endif
+
     demo.init_vk_swapchain();
 
     demo.prepare();
 
+#ifdef ENBALE_GLFW
+    while (glfw.runLoop())
+    {
+        demo.run();
+    }
+    demo.cleanup();
+    return 0;
+#else
     done = false; // initialize loop condition variable
 
     // main message loop
@@ -2806,10 +2838,9 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR pCmdLine,
         }
         RedrawWindow(demo.window, nullptr, nullptr, RDW_INTERNALPAINT);
     }
-
     demo.cleanup();
-
     return (int)msg.wParam;
+#endif
 }
 
 #elif __linux__

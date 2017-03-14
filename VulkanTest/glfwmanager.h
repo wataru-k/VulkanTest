@@ -1,3 +1,4 @@
+#pragma once
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
 #define GLFW_EXPOSE_NATIVE_WIN32
@@ -14,8 +15,7 @@ public:
 
 	bool initilize();
 
-	bool createWindow(int w, int h
-		, const char *title);
+	bool createWindow(int w, int h, const char *title);
 	
 	HWND getWindow()const;
 

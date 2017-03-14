@@ -10,7 +10,9 @@ GlfwManager::~GlfwManager()
     glfwTerminate();
 }
 
-bool GlfwManager::initilize() {
+bool 
+GlfwManager::initilize() 
+{
     if (!glfwInit()) {
         return false;
     }
@@ -23,8 +25,8 @@ bool GlfwManager::initilize() {
     return true;
 }
 
-bool GlfwManager::createWindow(int w, int h
-    , const char *title)
+bool 
+GlfwManager::createWindow(int w, int h, const char *title)
 {
     if (m_window) {
         return false;
@@ -40,12 +42,14 @@ bool GlfwManager::createWindow(int w, int h
     return true;
 }
 
-HWND GlfwManager::getWindow()const
+HWND 
+GlfwManager::getWindow()const
 {
     return glfwGetWin32Window(m_window);
 }
 
-bool GlfwManager::runLoop()
+bool 
+GlfwManager::runLoop()
 {
     if (glfwWindowShouldClose(m_window)) {
         return false;
