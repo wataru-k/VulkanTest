@@ -24,6 +24,9 @@
     <ClInclude Include="glfwmanager.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="CmdLineArgs.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="cube.cpp">

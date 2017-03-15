@@ -2180,58 +2180,27 @@ struct Demo {
 };
 
 
-// Include header required for parsing the command line options.
-#include <shellapi.h>
 
 Demo demo;
 
 #include "glfwmanager.h"
+
+#include "CmdLineArgs.h"
+
+
 
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR pCmdLine, int nCmdShow)
 {
     int argc;
     char **argv;
 
-    LPWSTR *commandLineArgs = CommandLineToArgvW(GetCommandLineW(), &argc);
-    if (nullptr == commandLineArgs) {
-        argc = 0;
-    }
-
-    if (argc > 0) {
-        argv = (char **)malloc(sizeof(char *) * argc);
-        if (argv == nullptr) {
-            argc = 0;
-        } else {
-            for (int iii = 0; iii < argc; iii++) {
-                size_t wideCharLen = wcslen(commandLineArgs[iii]);
-                size_t numConverted = 0;
-
-                argv[iii] = (char *)malloc(sizeof(char) * (wideCharLen + 1));
-                if (argv[iii] != nullptr) {
-                    wcstombs_s(&numConverted, argv[iii], wideCharLen + 1,
-                               commandLineArgs[iii], wideCharLen + 1);
-                }
-            }
-        }
-    } else {
-        argv = nullptr;
-    }
+    CmdLineArgs::begin(argc, argv);
 
     demo.init(argc, argv);
 
-    // Free up the items we had to allocate for the command line arguments.
-    if (argc > 0 && argv != nullptr) {
-        for (int iii = 0; iii < argc; iii++) {
-            if (argv[iii] != nullptr) {
-                free(argv[iii]);
-            }
-        }
-        free(argv);
-    }
 
     demo.connection = hInstance;
     strncpy(demo.name, "cube", APP_NAME_STR_LEN);
-
 
     int w = 512;
     int h = 512;
@@ -2254,6 +2223,9 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR pCmdLine,
         demo.run();
     }
     demo.cleanup();
+
+
+    CmdLineArgs::end(argc, argv);
 
     return 0;
 }
