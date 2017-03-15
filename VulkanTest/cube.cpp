@@ -1,23 +1,3 @@
-/*
-* Copyright (c) 2015-2016 The Khronos Group Inc.
-* Copyright (c) 2015-2016 Valve Corporation
-* Copyright (c) 2015-2016 LunarG, Inc.
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-*     http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*
-* Author: Jeremy Hayes <jeremy@lunarg.com>
-*/
-
 
 #include <cassert>
 #include <cstdio>
@@ -204,23 +184,10 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
 struct Demo {
     Demo()
         :
-#if defined(VK_USE_PLATFORM_WIN32_KHR)
           connection{nullptr},
           window{nullptr},
           minsize(POINT{
               0, 0}), // Use explicit construction to avoid MSVC error C2797.
-#endif
-#if defined(VK_USE_PLATFORM_XLIB_KHR)
-          xlib_window{0},
-          xlib_wm_delete_window{0}, display{nullptr},
-#endif
-#if defined(VK_USE_PLATFORM_XCB_KHR)
-          xcb_window{0}, screen{nullptr}, connection{nullptr},
-#endif
-#if defined(VK_USE_PLATFORM_WAYLAND_KHR)
-          display{nullptr}, registry{nullptr}, compositor{nullptr},
-          window{nullptr}, shell{nullptr}, shell_surface{nullptr},
-#endif
           prepared{false}, use_staging_buffer{false}, use_xlib{false},
           graphics_queue_family_index{0}, present_queue_family_index{0},
           enabled_extension_count{0}, enabled_layer_count{0}, width{0},
@@ -338,31 +305,6 @@ struct Demo {
         device.destroy(nullptr);
         inst.destroySurfaceKHR(surface, nullptr);
         inst.destroy(nullptr);
-
-#if defined(VK_USE_PLATFORM_XLIB_KHR) && defined(VK_USE_PLATFORM_XCB_KHR)
-        if (use_xlib) {
-            XDestroyWindow(display, xlib_window);
-            XCloseDisplay(display);
-        } else {
-            xcb_destroy_window(connection, xcb_window);
-            xcb_disconnect(connection);
-        }
-        free(atom_wm_delete_window);
-#elif defined(VK_USE_PLATFORM_XLIB_KHR)
-        XDestroyWindow(display, xlib_window);
-        XCloseDisplay(display);
-#elif defined(VK_USE_PLATFORM_XCB_KHR)
-        xcb_destroy_window(connection, xcb_window);
-        xcb_disconnect(connection);
-        free(atom_wm_delete_window);
-#elif defined(VK_USE_PLATFORM_WAYLAND_KHR)
-        wl_shell_surface_destroy(shell_surface);
-        wl_surface_destroy(window);
-        wl_shell_destroy(shell);
-        wl_compositor_destroy(compositor);
-        wl_registry_destroy(registry);
-        wl_display_disconnect(display);
-#endif
     }
 
     void create_device() {
@@ -623,12 +565,6 @@ struct Demo {
                 validate = true;
                 continue;
             }
-#if defined(VK_USE_PLATFORM_XLIB_KHR)
-            if (strcmp(argv[i], "--xlib") == 0) {
-                use_xlib = true;
-                continue;
-            }
-#endif
             if (strcmp(argv[i], "--c") == 0 && frameCount == UINT32_MAX &&
                 i < argc - 1 && sscanf(argv[i + 1], "%d", &frameCount) == 1) {
                 i++;
@@ -641,17 +577,10 @@ struct Demo {
 
             fprintf(stderr,
                     "Usage:\n  %s [--use_staging] [--validate] [--break] "
-#if defined(VK_USE_PLATFORM_XLIB_KHR)
-                    "[--xlib] "
-#endif
                     "[--c <framecount>] [--suppress_popups]\n",
                     APP_SHORT_NAME);
             fflush(stderr);
             exit(1);
-        }
-
-        if (!use_xlib) {
-            init_connection();
         }
 
         init_vk();
@@ -672,43 +601,9 @@ struct Demo {
             -1; // Flip projection matrix from GL to Vulkan orientation.
     }
 
-    void init_connection() {
-#if defined(VK_USE_PLATFORM_XCB_KHR)
-        const xcb_setup_t *setup;
-        xcb_screen_iterator_t iter;
-        int scr;
 
-        connection = xcb_connect(nullptr, &scr);
-        if (xcb_connection_has_error(connection) > 0) {
-            printf("Cannot find a compatible Vulkan installable client driver "
-                   "(ICD).\nExiting ...\n");
-            fflush(stdout);
-            exit(1);
-        }
-
-        setup = xcb_get_setup(connection);
-        iter = xcb_setup_roots_iterator(setup);
-        while (scr-- > 0)
-            xcb_screen_next(&iter);
-
-        screen = iter.data;
-#elif defined(VK_USE_PLATFORM_WAYLAND_KHR)
-        display = wl_display_connect(nullptr);
-
-        if (display == nullptr) {
-            printf("Cannot find a compatible Vulkan installable client driver "
-                   "(ICD).\nExiting ...\n");
-            fflush(stdout);
-            exit(1);
-        }
-
-        registry = wl_display_get_registry(display);
-        wl_registry_add_listener(registry, &registry_listener, this);
-        wl_display_dispatch(display);
-#endif
-    }
-
-    void init_vk() {
+    void init_vk() 
+    {
         uint32_t instance_extension_count = 0;
         uint32_t instance_layer_count = 0;
         uint32_t validation_layer_count = 0;
@@ -782,9 +677,7 @@ struct Demo {
         /* Look for instance extensions */
         vk::Bool32 surfaceExtFound = VK_FALSE;
         vk::Bool32 platformSurfaceExtFound = VK_FALSE;
-#if defined(VK_USE_PLATFORM_XLIB_KHR)
-        vk::Bool32 xlibSurfaceExtFound = VK_FALSE;
-#endif
+
         memset(extension_names, 0, sizeof(extension_names));
 
         auto result = vk::enumerateInstanceExtensionProperties(
@@ -805,39 +698,12 @@ struct Demo {
                     extension_names[enabled_extension_count++] =
                         VK_KHR_SURFACE_EXTENSION_NAME;
                 }
-#if defined(VK_USE_PLATFORM_WIN32_KHR)
                 if (!strcmp(VK_KHR_WIN32_SURFACE_EXTENSION_NAME,
                             instance_extensions[i].extensionName)) {
                     platformSurfaceExtFound = 1;
                     extension_names[enabled_extension_count++] =
                         VK_KHR_WIN32_SURFACE_EXTENSION_NAME;
                 }
-#endif
-#if defined(VK_USE_PLATFORM_XLIB_KHR)
-                if (!strcmp(VK_KHR_XLIB_SURFACE_EXTENSION_NAME,
-                            instance_extensions[i].extensionName)) {
-                    platformSurfaceExtFound = 1;
-                    xlibSurfaceExtFound = 1;
-                    extension_names[enabled_extension_count++] =
-                        VK_KHR_XLIB_SURFACE_EXTENSION_NAME;
-                }
-#endif
-#if defined(VK_USE_PLATFORM_XCB_KHR)
-                if (!strcmp(VK_KHR_XCB_SURFACE_EXTENSION_NAME,
-                            instance_extensions[i].extensionName)) {
-                    platformSurfaceExtFound = 1;
-                    extension_names[enabled_extension_count++] =
-                        VK_KHR_XCB_SURFACE_EXTENSION_NAME;
-                }
-#endif
-#if defined(VK_USE_PLATFORM_WAYLAND_KHR)
-                if (!strcmp(VK_KHR_WAYLAND_SURFACE_EXTENSION_NAME,
-                            instance_extensions[i].extensionName)) {
-                    platformSurfaceExtFound = 1;
-                    extension_names[enabled_extension_count++] =
-                        VK_KHR_WAYLAND_SURFACE_EXTENSION_NAME;
-                }
-#endif
                 assert(enabled_extension_count < 64);
             }
         }
@@ -853,7 +719,6 @@ struct Demo {
         }
 
         if (!platformSurfaceExtFound) {
-#if defined(VK_USE_PLATFORM_WIN32_KHR)
             ERR_EXIT("vkEnumerateInstanceExtensionProperties failed to find "
                      "the " VK_KHR_WIN32_SURFACE_EXTENSION_NAME
                      " extension.\n\n"
@@ -862,37 +727,7 @@ struct Demo {
                      "Please look at the Getting Started guide for additional "
                      "information.\n",
                      "vkCreateInstance Failure");
-#elif defined(VK_USE_PLATFORM_XCB_KHR)
-            ERR_EXIT("vkEnumerateInstanceExtensionProperties failed to find "
-                     "the " VK_KHR_XCB_SURFACE_EXTENSION_NAME " extension.\n\n"
-                     "Do you have a compatible Vulkan installable client "
-                     "driver (ICD) installed?\n"
-                     "Please look at the Getting Started guide for additional "
-                     "information.\n",
-                     "vkCreateInstance Failure");
-#elif defined(VK_USE_PLATFORM_WAYLAND_KHR)
-            ERR_EXIT("vkEnumerateInstanceExtensionProperties failed to find "
-                     "the " VK_KHR_WAYLAND_SURFACE_EXTENSION_NAME
-                     " extension.\n\n"
-                     "Do you have a compatible Vulkan installable client "
-                     "driver (ICD) installed?\n"
-                     "Please look at the Getting Started guide for additional "
-                     "information.\n",
-                     "vkCreateInstance Failure");
-#endif
         }
-
-#if defined(VK_USE_PLATFORM_XLIB_KHR)
-        if (use_xlib && !xlibSurfaceExtFound) {
-            ERR_EXIT("vkEnumerateInstanceExtensionProperties failed to find "
-                     "the " VK_KHR_XLIB_SURFACE_EXTENSION_NAME " extension.\n\n"
-                     "Do you have a compatible Vulkan installable client "
-                     "driver (ICD) installed?\n"
-                     "Please look at the Getting Started guide for additional "
-                     "information.\n",
-                     "vkCreateInstance Failure");
-        }
-#endif
 
         auto const app = vk::ApplicationInfo()
                              .setPApplicationName(APP_SHORT_NAME)
@@ -1006,9 +841,10 @@ struct Demo {
         gpu.getFeatures(&physDevFeatures);
     }
 
-    void init_vk_swapchain() {
-// Create a WSI surface for the window:
-#if defined(VK_USE_PLATFORM_WIN32_KHR)
+    void init_vk_swapchain() 
+    {
+        // Create a WSI surface for the window:
+        //VK_USE_PLATFORM_WIN32_KHR)
         {
             auto const createInfo = vk::Win32SurfaceCreateInfoKHR()
                                         .setHinstance(connection)
@@ -1017,38 +853,6 @@ struct Demo {
             auto result =
                 inst.createWin32SurfaceKHR(&createInfo, nullptr, &surface);
             VERIFY(result == vk::Result::eSuccess);
-        }
-#elif defined(VK_USE_PLATFORM_WAYLAND_KHR) && !defined(VK_USE_PLATFORM_XCB_KHR)
-        {
-            auto const createInfo = vk::WaylandSurfaceCreateInfoKHR()
-                                        .setDisplay(display)
-                                        .setSurface(window);
-
-            auto result =
-                inst.createWaylandSurfaceKHR(&createInfo, nullptr, &surface);
-            VERIFY(result == vk::Result::eSuccess);
-        }
-#endif
-        if (use_xlib) {
-#if defined(VK_USE_PLATFORM_XLIB_KHR)
-            auto const createInfo =
-                vk::XlibSurfaceCreateInfoKHR().setDpy(display).setWindow(
-                    xlib_window);
-
-            auto result =
-                inst.createXlibSurfaceKHR(&createInfo, nullptr, &surface);
-            VERIFY(result == vk::Result::eSuccess);
-#endif
-        } else {
-#if defined(VK_USE_PLATFORM_XCB_KHR)
-            auto const createInfo = vk::XcbSurfaceCreateInfoKHR()
-                                        .setConnection(connection)
-                                        .setWindow(xcb_window);
-
-            auto result =
-                inst.createXcbSurfaceKHR(&createInfo, nullptr, &surface);
-            VERIFY(result == vk::Result::eSuccess);
-#endif
         }
 
         // Iterate over each queue to learn whether it supports presenting:
@@ -1163,7 +967,8 @@ struct Demo {
         gpu.getMemoryProperties(&memory_properties);
     }
 
-    void prepare() {
+    void prepare() 
+    {
         auto const cmd_pool_info =
             vk::CommandPoolCreateInfo().setQueueFamilyIndex(
                 graphics_queue_family_index);
@@ -2387,12 +2192,6 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR pCmdLine,
     int argc;
     char **argv;
 
-    // Use the CommandLine functions to get the command line arguments.
-    // Unfortunately, Microsoft outputs
-    // this information as wide characters for Unicode, and we simply want the
-    // Ascii version to be compatible
-    // with the non-Windows side.  So, we have to convert the information to
-    // Ascii character strings.
     LPWSTR *commandLineArgs = CommandLineToArgvW(GetCommandLineW(), &argc);
     if (nullptr == commandLineArgs) {
         argc = 0;
