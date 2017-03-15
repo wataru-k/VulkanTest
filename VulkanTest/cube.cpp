@@ -18,9 +18,6 @@
 * Author: Jeremy Hayes <jeremy@lunarg.com>
 */
 
-#if defined(VK_USE_PLATFORM_XLIB_KHR) || defined(VK_USE_PLATFORM_XCB_KHR)
-#include <X11/Xutil.h>
-#endif
 
 #include <cassert>
 #include <cstdio>
@@ -2265,7 +2262,6 @@ struct Demo {
         return false;
     }
 
-#if defined(VK_USE_PLATFORM_WIN32_KHR)
     void run() {
         if (!prepared) {
             return;
@@ -2280,332 +2276,12 @@ struct Demo {
         }
     }
 
-    void create_window() {
-        WNDCLASSEX win_class;
 
-        // Initialize the window class structure:
-        win_class.cbSize = sizeof(WNDCLASSEX);
-        win_class.style = CS_HREDRAW | CS_VREDRAW;
-        win_class.lpfnWndProc = WndProc;
-        win_class.cbClsExtra = 0;
-        win_class.cbWndExtra = 0;
-        win_class.hInstance = connection; // hInstance
-        win_class.hIcon = LoadIcon(nullptr, IDI_APPLICATION);
-        win_class.hCursor = LoadCursor(nullptr, IDC_ARROW);
-        win_class.hbrBackground = (HBRUSH)GetStockObject(WHITE_BRUSH);
-        win_class.lpszMenuName = nullptr;
-        win_class.lpszClassName = name;
-        win_class.hIconSm = LoadIcon(nullptr, IDI_WINLOGO);
 
-        // Register window class:
-        if (!RegisterClassEx(&win_class)) {
-            // It didn't work, so try to give a useful error:
-            printf("Unexpected error trying to start the application!\n");
-            fflush(stdout);
-            exit(1);
-        }
-
-        // Create window with the registered class:
-        RECT wr = {0, 0, static_cast<LONG>(width), static_cast<LONG>(height)};
-        AdjustWindowRect(&wr, WS_OVERLAPPEDWINDOW, FALSE);
-        window = CreateWindowEx(0,
-                                name,                 // class name
-                                name,                 // app name
-                                WS_OVERLAPPEDWINDOW | // window style
-                                    WS_VISIBLE | WS_SYSMENU,
-                                100, 100,           // x/y coords
-                                wr.right - wr.left, // width
-                                wr.bottom - wr.top, // height
-                                nullptr,            // handle to parent
-                                nullptr,            // handle to menu
-                                connection,         // hInstance
-                                nullptr);           // no extra parameters
-
-        if (!window) {
-            // It didn't work, so try to give a useful error:
-            printf("Cannot create a window in which to draw!\n");
-            fflush(stdout);
-            exit(1);
-        }
-
-        // Window client area size must be at least 1 pixel high, to prevent
-        // crash.
-        minsize.x = GetSystemMetrics(SM_CXMINTRACK);
-        minsize.y = GetSystemMetrics(SM_CYMINTRACK) + 1;
-    }
-
-#elif defined(VK_USE_PLATFORM_XLIB_KHR) || defined(VK_USE_PLATFORM_XCB_KHR)
-#if defined(VK_USE_PLATFORM_XLIB_KHR)
-
-    void create_xlib_window() {
-        display = XOpenDisplay(nullptr);
-        long visualMask = VisualScreenMask;
-        int numberOfVisuals;
-        XVisualInfo vInfoTemplate = {};
-        vInfoTemplate.screen = DefaultScreen(display);
-        XVisualInfo *visualInfo = XGetVisualInfo(
-            display, visualMask, &vInfoTemplate, &numberOfVisuals);
-
-        Colormap colormap =
-            XCreateColormap(display, RootWindow(display, vInfoTemplate.screen),
-                            visualInfo->visual, AllocNone);
-
-        XSetWindowAttributes windowAttributes = {};
-        windowAttributes.colormap = colormap;
-        windowAttributes.background_pixel = 0xFFFFFFFF;
-        windowAttributes.border_pixel = 0;
-        windowAttributes.event_mask =
-            KeyPressMask | KeyReleaseMask | StructureNotifyMask | ExposureMask;
-
-        xlib_window = XCreateWindow(
-            display, RootWindow(display, vInfoTemplate.screen), 0, 0, width,
-            height, 0, visualInfo->depth, InputOutput, visualInfo->visual,
-            CWBackPixel | CWBorderPixel | CWEventMask | CWColormap,
-            &windowAttributes);
-
-        XSelectInput(display, xlib_window, ExposureMask | KeyPressMask);
-        XMapWindow(display, xlib_window);
-        XFlush(display);
-        xlib_wm_delete_window = XInternAtom(display, "WM_DELETE_WINDOW", False);
-    }
-
-    void handle_xlib_event(const XEvent *event) {
-        switch (event->type) {
-        case ClientMessage:
-            if ((Atom)event->xclient.data.l[0] == xlib_wm_delete_window) {
-                quit = true;
-            }
-            break;
-        case KeyPress:
-            switch (event->xkey.keycode) {
-            case 0x9: // Escape
-                quit = true;
-                break;
-            case 0x71: // left arrow key
-                spin_angle += spin_increment;
-                break;
-            case 0x72: // right arrow key
-                spin_angle -= spin_increment;
-                break;
-            case 0x41:
-                pause = !pause;
-                break;
-            }
-            break;
-        case ConfigureNotify:
-            if (((int32_t)width != event->xconfigure.width) ||
-                ((int32_t)height != event->xconfigure.height)) {
-                width = event->xconfigure.width;
-                height = event->xconfigure.height;
-                resize();
-            }
-            break;
-        default:
-            break;
-        }
-    }
-
-    void run_xlib() {
-        while (!quit) {
-            XEvent event;
-
-            if (pause) {
-                XNextEvent(display, &event);
-                handle_xlib_event(&event);
-            } else {
-                while (XPending(display) > 0) {
-                    XNextEvent(display, &event);
-                    handle_xlib_event(&event);
-                }
-            }
-
-            update_data_buffer();
-            draw();
-            curFrame++;
-
-            if (frameCount != UINT32_MAX && curFrame == frameCount) {
-                quit = true;
-            }
-        }
-    }
-
-#endif
-#if defined(VK_USE_PLATFORM_XCB_KHR)
-
-    void handle_xcb_event(const xcb_generic_event_t *event) {
-        uint8_t event_code = event->response_type & 0x7f;
-        switch (event_code) {
-        case XCB_EXPOSE:
-            // TODO: Resize window
-            break;
-        case XCB_CLIENT_MESSAGE:
-            if ((*(xcb_client_message_event_t *)event).data.data32[0] ==
-                (*atom_wm_delete_window).atom) {
-                quit = true;
-            }
-            break;
-        case XCB_KEY_RELEASE: {
-            const xcb_key_release_event_t *key =
-                (const xcb_key_release_event_t *)event;
-
-            switch (key->detail) {
-            case 0x9: // Escape
-                quit = true;
-                break;
-            case 0x71: // left arrow key
-                spin_angle += spin_increment;
-                break;
-            case 0x72: // right arrow key
-                spin_angle -= spin_increment;
-                break;
-            case 0x41:
-                pause = !pause;
-                break;
-            }
-        } break;
-        case XCB_CONFIGURE_NOTIFY: {
-            const xcb_configure_notify_event_t *cfg =
-                (const xcb_configure_notify_event_t *)event;
-            if ((width != cfg->width) || (height != cfg->height)) {
-                width = cfg->width;
-                height = cfg->height;
-                resize();
-            }
-        } break;
-        default:
-            break;
-        }
-    }
-
-    void run_xcb() {
-        xcb_flush(connection);
-
-        while (!quit) {
-            xcb_generic_event_t *event;
-
-            if (pause) {
-                event = xcb_wait_for_event(connection);
-            } else {
-                event = xcb_poll_for_event(connection);
-                while (event) {
-                    handle_xcb_event(event);
-                    free(event);
-                    event = xcb_poll_for_event(connection);
-                }
-            }
-
-            update_data_buffer();
-            draw();
-            curFrame++;
-            if (frameCount != UINT32_MAX && curFrame == frameCount) {
-                quit = true;
-            }
-        }
-    }
-
-    void create_xcb_window() {
-        uint32_t value_mask, value_list[32];
-
-        xcb_window = xcb_generate_id(connection);
-
-        value_mask = XCB_CW_BACK_PIXEL | XCB_CW_EVENT_MASK;
-        value_list[0] = screen->black_pixel;
-        value_list[1] = XCB_EVENT_MASK_KEY_RELEASE | XCB_EVENT_MASK_EXPOSURE |
-                        XCB_EVENT_MASK_STRUCTURE_NOTIFY;
-
-        xcb_create_window(connection, XCB_COPY_FROM_PARENT, xcb_window,
-                          screen->root, 0, 0, width, height, 0,
-                          XCB_WINDOW_CLASS_INPUT_OUTPUT, screen->root_visual,
-                          value_mask, value_list);
-
-        /* Magic code that will send notification when window is destroyed */
-        xcb_intern_atom_cookie_t cookie =
-            xcb_intern_atom(connection, 1, 12, "WM_PROTOCOLS");
-        xcb_intern_atom_reply_t *reply =
-            xcb_intern_atom_reply(connection, cookie, 0);
-
-        xcb_intern_atom_cookie_t cookie2 =
-            xcb_intern_atom(connection, 0, 16, "WM_DELETE_WINDOW");
-        atom_wm_delete_window = xcb_intern_atom_reply(connection, cookie2, 0);
-
-        xcb_change_property(connection, XCB_PROP_MODE_REPLACE, xcb_window,
-                            (*reply).atom, 4, 32, 1,
-                            &(*atom_wm_delete_window).atom);
-
-        free(reply);
-
-        xcb_map_window(connection, xcb_window);
-
-        // Force the x/y coordinates to 100,100 results are identical in
-        // consecutive
-        // runs
-        const uint32_t coords[] = {100, 100};
-        xcb_configure_window(connection, xcb_window,
-                             XCB_CONFIG_WINDOW_X | XCB_CONFIG_WINDOW_Y, coords);
-    }
-
-#endif
-#elif defined(VK_USE_PLATFORM_WAYLAND_KHR)
-
-    void run() {
-        while (!quit) {
-            update_data_buffer();
-            draw();
-            curFrame++;
-            if (frameCount != UINT32_MAX && curFrame == frameCount) {
-                quit = true;
-            }
-        }
-    }
-
-    void create_window() {
-        window = wl_compositor_create_surface(compositor);
-        if (!window) {
-            printf("Can not create wayland_surface from compositor!\n");
-            fflush(stdout);
-            exit(1);
-        }
-
-        shell_surface = wl_shell_get_shell_surface(shell, window);
-        if (!shell_surface) {
-            printf("Can not get shell_surface from wayland_surface!\n");
-            fflush(stdout);
-            exit(1);
-        }
-
-        wl_shell_surface_add_listener(shell_surface, &shell_surface_listener,
-                                      this);
-        wl_shell_surface_set_toplevel(shell_surface);
-        wl_shell_surface_set_title(shell_surface, APP_SHORT_NAME);
-    }
-
-#endif
-
-#if defined(VK_USE_PLATFORM_WIN32_KHR)
     HINSTANCE connection;        // hInstance - Windows Instance
     HWND window;                 // hWnd - window handle
     POINT minsize;               // minimum window size
     char name[APP_NAME_STR_LEN]; // Name to put on the window/icon
-#endif
-#if defined(VK_USE_PLATFORM_XLIB_KHR)
-    Window xlib_window;
-    Atom xlib_wm_delete_window;
-    Display *display;
-#endif
-#if defined(VK_USE_PLATFORM_XCB_KHR)
-    xcb_window_t xcb_window;
-    xcb_screen_t *screen;
-    xcb_connection_t *connection;
-    xcb_intern_atom_reply_t *atom_wm_delete_window;
-#endif
-#if defined(VK_USE_PLATFORM_WAYLAND_KHR)
-    wl_display *display;
-    wl_registry *registry;
-    wl_compositor *compositor;
-    wl_surface *window;
-    wl_shell *shell;
-    wl_shell_surface *shell_surface;
-#endif
 
     vk::SurfaceKHR surface;
     bool prepared;
@@ -2698,53 +2374,16 @@ struct Demo {
     uint32_t queue_family_count;
 };
 
-#define ENBALE_GLFW //glfw
 
-#if _WIN32
 // Include header required for parsing the command line options.
 #include <shellapi.h>
 
 Demo demo;
 
-#ifndef ENBALE_GLFW
-// MS-Windows event handling function:
-LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
-    switch (uMsg) {
-    case WM_CLOSE:
-        PostQuitMessage(validation_error);
-        break;
-    case WM_PAINT:
-        demo.run();
-        break;
-    case WM_GETMINMAXINFO: // set window's minimum size
-        ((MINMAXINFO *)lParam)->ptMinTrackSize = demo.minsize;
-        return 0;
-    case WM_SIZE:
-        // Resize the application to the new window size, except when
-        // it was minimized. Vulkan doesn't support images or swapchains
-        // with width=0 and height=0.
-        if (wParam != SIZE_MINIMIZED) {
-            demo.width = lParam & 0xffff;
-            demo.height = (lParam & 0xffff0000) >> 16;
-            demo.resize();
-        }
-        break;
-    default:
-        break;
-    }
-
-    return (DefWindowProc(hWnd, uMsg, wParam, lParam));
-}
-#endif
-
 #include "glfwmanager.h"
 
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR pCmdLine, int nCmdShow)
 {
-
-    // TODO: Gah.. refactor. This isn't 1989.
-    MSG msg;   // message
-    bool done; // flag saying when app is complete
     int argc;
     char **argv;
 
@@ -2794,7 +2433,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR pCmdLine,
     demo.connection = hInstance;
     strncpy(demo.name, "cube", APP_NAME_STR_LEN);
 
-#ifdef ENBALE_GLFW
+
     int w = 512;
     int h = 512;
 
@@ -2807,105 +2446,16 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR pCmdLine,
     }
     demo.window = glfw.getWindow();
 
-#else
-    demo.create_window();
-#endif
-
     demo.init_vk_swapchain();
 
     demo.prepare();
 
-#ifdef ENBALE_GLFW
     while (glfw.runLoop())
     {
         demo.run();
     }
     demo.cleanup();
+
     return 0;
-#else
-    done = false; // initialize loop condition variable
-
-    // main message loop
-    while (!done) {
-        PeekMessage(&msg, nullptr, 0, 0, PM_REMOVE);
-        if (msg.message == WM_QUIT) // check for a quit message
-        {
-            done = true; // if found, quit app
-        } else {
-            /* Translate and dispatch to event queue*/
-            TranslateMessage(&msg);
-            DispatchMessage(&msg);
-        }
-        RedrawWindow(demo.window, nullptr, nullptr, RDW_INTERNALPAINT);
-    }
-    demo.cleanup();
-    return (int)msg.wParam;
-#endif
 }
 
-#elif __linux__
-
-#if defined(VK_USE_PLATFORM_WAYLAND_KHR)
-static void handle_ping(void *data, wl_shell_surface *shell_surface,
-                        uint32_t serial) {
-    wl_shell_surface_pong(shell_surface, serial);
-}
-
-static void handle_configure(void *data,
-                             wl_shell_surface *shell_surface,
-                             uint32_t edges, int32_t width,
-                             int32_t height) {}
-
-static void handle_popup_done(void *data,
-                              wl_shell_surface *shell_surface) {}
-
-static const wl_shell_surface_listener shell_surface_listener = {
-    handle_ping, handle_configure, handle_popup_done};
-#endif
-
-int main(int argc, char **argv) {
-    Demo demo;
-
-    demo.init(argc, argv);
-
-#if defined(VK_USE_PLATFORM_XLIB_KHR) && defined(VK_USE_PLATFORM_XCB_KHR)
-    if (demo.use_xlib) {
-        demo.create_xlib_window();
-    } else {
-        demo.create_xcb_window();
-    }
-#elif defined(VK_USE_PLATFORM_XCB_KHR)
-    demo.create_xcb_window();
-#elif defined(VK_USE_PLATFORM_XLIB_KHR)
-    demo.use_xlib = true;
-    demo.create_xlib_window();
-#elif defined(VK_USE_PLATFORM_WAYLAND_KHR)
-    demo.create_window();
-#endif
-
-    demo.init_vk_swapchain();
-
-    demo.prepare();
-
-#if defined(VK_USE_PLATFORM_XLIB_KHR) && defined(VK_USE_PLATFORM_XCB_KHR)
-    if (demo.use_xlib) {
-        demo.run_xlib();
-    } else {
-        demo.run_xcb();
-    }
-#elif defined(VK_USE_PLATFORM_XCB_KHR)
-demo.run_xcb();
-#elif defined(VK_USE_PLATFORM_XLIB_KHR)
-demo.run_xlib();
-#elif defined(VK_USE_PLATFORM_WAYLAND_KHR)
-demo.run();
-#endif
-
-    demo.cleanup();
-
-    return validation_error;
-}
-
-#else
-#error "Platform not supported"
-#endif
