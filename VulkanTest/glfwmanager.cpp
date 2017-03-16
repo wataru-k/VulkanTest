@@ -33,11 +33,13 @@ GlfwManager::createWindow(int w, int h, const char *title)
     }
 
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-    m_window = glfwCreateWindow(w, h
-        , title, nullptr, nullptr);
+
+    m_window = glfwCreateWindow(w, h, title, nullptr, nullptr);
+
     if (!m_window) {
         return false;
     }
+
     //glfwMakeContextCurrent(m_window);
     return true;
 }
