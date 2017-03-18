@@ -54,16 +54,25 @@ struct texture_object {
 #define FRAME_LAG 2
 
 
-struct Demo 
+class Demo 
 {
 public:
     Demo();
 
+    //#1
+    void init(int argc, char** argv, const char* name);
+
+    //#1
+    void init_vk_swapchain(HINSTANCE inst, HWND wnd);
+
+private:
+
+
+    void init_vk();
+
+public:
     void build_image_ownership_cmd(uint32_t const &i);
 
-    vk::Bool32 check_layers(uint32_t check_count,
-        char const *const *const check_names,
-        uint32_t layer_count, vk::LayerProperties *layers);
 
     void cleanup();
 
@@ -77,11 +86,8 @@ public:
 
     void flush_init_cmd();
 
-    void init(int argc, char** argv);
 
-    void init_vk();
 
-    void init_vk_swapchain();
 
     void prepare();
 
@@ -139,10 +145,14 @@ public:
     void run();
 
 
-    HINSTANCE connection;        // hInstance - Windows Instance
+private:
+    HINSTANCE connection_;        // hInstance - Windows Instance
     HWND window;                 // hWnd - window handle
-    POINT minsize;               // minimum window size
-    char name[APP_NAME_STR_LEN]; // Name to put on the window/icon
+    char name_[APP_NAME_STR_LEN]; // Name to put on the window/icon
+
+    bool validate_;
+
+
 
     vk::SurfaceKHR surface;
     bool prepared;
@@ -227,7 +237,6 @@ public:
     bool quit;
     uint32_t curFrame;
     uint32_t frameCount;
-    bool validate;
     bool use_break;
     bool suppress_popups;
 

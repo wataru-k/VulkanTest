@@ -15,6 +15,8 @@ public:
 
 	bool initilize();
 
+    void finalize();
+
 	bool createWindow(int w, int h, const char *title);
 	
 	HWND getWindow()const;

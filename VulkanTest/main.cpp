@@ -3,34 +3,26 @@
 #include "CmdLineArgs.h"
 #include "Demo.h"
 
+#define APP_SHORT_NAME "VulkanTest"
+
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR pCmdLine, int nCmdShow)
 {
-    int argc;
-    char **argv;
-
+    CmdLineArgs args;
+    GlfwManager glfw;
     Demo demo;
 
-    CmdLineArgs::begin(argc, argv);
 
-    demo.init(argc, argv);
+    demo.init(args.argc(), args.argv(), APP_SHORT_NAME);
 
 
-    demo.connection = hInstance;
-    strncpy(demo.name, "cube", APP_NAME_STR_LEN);
-
-    int w = 512;
-    int h = 512;
-
-    GlfwManager glfw;
     if (!glfw.initilize()) {
         return 1;
     }
-    if (!glfw.createWindow(w, h, "Hello vulkan")) {
+    if (!glfw.createWindow(512, 512, APP_SHORT_NAME)) {
         return 2;
     }
-    demo.window = glfw.getWindow();
 
-    demo.init_vk_swapchain();
+    demo.init_vk_swapchain(hInstance, glfw.getWindow());
 
     demo.prepare();
 
@@ -41,7 +33,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR pCmdLine,
     demo.cleanup();
 
 
-    CmdLineArgs::end(argc, argv);
+    glfw.finalize();
 
     return 0;
 }

@@ -25,6 +25,12 @@ GlfwManager::initilize()
     return true;
 }
 
+void
+GlfwManager::finalize()
+{
+    glfwTerminate();
+}
+
 bool 
 GlfwManager::createWindow(int w, int h, const char *title)
 {

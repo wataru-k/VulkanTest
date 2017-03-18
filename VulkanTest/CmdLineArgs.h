@@ -4,47 +4,56 @@
 // Include header required for parsing the command line options.
 #include <shellapi.h>
 
-namespace CmdLineArgs {
+class CmdLineArgs {
 
-    void begin(int &argc, char **& argv)
+private:
+    int argc_ = 0;
+    char **argv_ = nullptr;
+
+public:
+
+    int argc() { return argc_; }
+    char **argv() { return argv_; }
+
+    CmdLineArgs()
     {
-        LPWSTR *commandLineArgs = CommandLineToArgvW(GetCommandLineW(), &argc);
+        LPWSTR *commandLineArgs = CommandLineToArgvW(GetCommandLineW(), &argc_);
         if (nullptr == commandLineArgs) {
-            argc = 0;
+            argc_ = 0;
         }
-        if (argc > 0) {
-            argv = (char **)malloc(sizeof(char *) * argc);
-            if (argv == nullptr) {
-                argc = 0;
+        if (argc_ > 0) {
+            argv_ = (char **)malloc(sizeof(char *) * argc_);
+            if (argv_ == nullptr) {
+                argc_ = 0;
             }
             else {
-                for (int iii = 0; iii < argc; iii++) {
+                for (int iii = 0; iii < argc_; iii++) {
                     size_t wideCharLen = wcslen(commandLineArgs[iii]);
                     size_t numConverted = 0;
 
-                    argv[iii] = (char *)malloc(sizeof(char) * (wideCharLen + 1));
-                    if (argv[iii] != nullptr) {
-                        wcstombs_s(&numConverted, argv[iii], wideCharLen + 1,
+                    argv_[iii] = (char *)malloc(sizeof(char) * (wideCharLen + 1));
+                    if (argv_[iii] != nullptr) {
+                        wcstombs_s(&numConverted, argv_[iii], wideCharLen + 1,
                             commandLineArgs[iii], wideCharLen + 1);
                     }
                 }
             }
         }
         else {
-            argv = nullptr;
+            argv_ = nullptr;
         }
     }
 
-    void end(int &argc, char **& argv)
+    ~CmdLineArgs()
     {
         // Free up the items we had to allocate for the command line arguments.
-        if (argc > 0 && argv != nullptr) {
-            for (int iii = 0; iii < argc; iii++) {
-                if (argv[iii] != nullptr) {
-                    free(argv[iii]);
+        if (argc_ > 0 && argv_ != nullptr) {
+            for (int iii = 0; iii < argc_; iii++) {
+                if (argv_[iii] != nullptr) {
+                    free(argv_[iii]);
                 }
             }
-            free(argv);
+            free(argv_);
         }
     }
 
