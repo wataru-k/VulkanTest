@@ -150,8 +150,10 @@ private:
     HWND window;                 // hWnd - window handle
     char name_[APP_NAME_STR_LEN]; // Name to put on the window/icon
 
-    bool validate_;
-
+    //Validation
+    bool validate_; //valiationするか否か。
+    uint32_t enabled_layer_count_; //有効化レイヤー数。
+    char const *enabled_layers_[64]; //有効化レイヤー名の配列。
 
 
     vk::SurfaceKHR surface;
@@ -175,9 +177,7 @@ private:
     vk::PhysicalDeviceMemoryProperties memory_properties;
 
     uint32_t enabled_extension_count;
-    uint32_t enabled_layer_count;
     char const *extension_names[64];
-    char const *enabled_layers[64];
 
     uint32_t width_;
     uint32_t height_;

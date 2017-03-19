@@ -1,6 +1,6 @@
 
 #include "Demo.h"
-
+#include "util_valkan.h"
 
 #ifndef NDEBUG
 #define VERIFY(x) assert(x)
@@ -39,7 +39,8 @@ Demo::Demo()
     window{ nullptr },
     prepared{ false }, use_staging_buffer{ false }, use_xlib{ false },
     graphics_queue_family_index{ 0 }, present_queue_family_index{ 0 },
-    enabled_extension_count{ 0 }, enabled_layer_count{ 0 },
+    enabled_extension_count{ 0 },
+    enabled_layer_count_{ 0 },
     width_{ 0 },
     height_{ 0 },
     swapchainImageCount{ 0 }, frame_index{ 0 }, spin_angle{ 0.0f },
@@ -120,156 +121,37 @@ void Demo::init(int argc, char **argv, const char *appName)
 }
 
 
-static vk::Bool32
-check_layers(uint32_t check_count,
-    char const *const *const check_names,
-    uint32_t layer_count, vk::LayerProperties *layers)
-{
-    for (uint32_t i = 0; i < check_count; i++) {
-        vk::Bool32 found = VK_FALSE;
-        for (uint32_t j = 0; j < layer_count; j++) {
-            if (!strcmp(check_names[i], layers[j].layerName)) {
-                found = VK_TRUE;
-                break;
-            }
-        }
-        if (!found) {
-            fprintf(stderr, "Cannot find layer: %s\n", check_names[i]);
-            return 0;
-        }
-    }
-    return VK_TRUE;
-}
-
-//static
-//update following members:
-//enabled_layer_count; : updated and used later
-//enabled_layers[i] : updated but unused later
-static  bool
-init_vk_validation(
-    char const *const *  &instance_validation_layers,
-    uint32_t &_enabled_layer_count,
-    const char *_enalble_layers[64])
-{
-    uint32_t instance_layer_count = 0;
-    uint32_t validation_layer_count = 0;
-
-
-    static char const *const instance_validation_layers_alt1[] = {
-        "VK_LAYER_LUNARG_standard_validation" };
-
-    static char const *const instance_validation_layers_alt2[] = {
-        "VK_LAYER_GOOGLE_threading",
-        "VK_LAYER_LUNARG_parameter_validation",
-        "VK_LAYER_LUNARG_object_tracker",
-        "VK_LAYER_LUNARG_image",
-        "VK_LAYER_LUNARG_core_validation",
-        "VK_LAYER_LUNARG_swapchain",
-        "VK_LAYER_GOOGLE_unique_objects" };
-
-    // Look for validation layers
-
-    vk::Bool32 validation_found = VK_FALSE;
-
-    auto result = vk::enumerateInstanceLayerProperties(
-        &instance_layer_count, nullptr);
-    VERIFY(result == vk::Result::eSuccess);
-
-    instance_validation_layers = instance_validation_layers_alt1;
-
-    if (instance_layer_count > 0) {
-        std::unique_ptr<vk::LayerProperties[]> instance_layers(
-            new vk::LayerProperties[instance_layer_count]);
-        result = vk::enumerateInstanceLayerProperties(
-            &instance_layer_count, instance_layers.get());
-        VERIFY(result == vk::Result::eSuccess);
-
-        validation_found =
-            check_layers(ARRAY_SIZE(instance_validation_layers_alt1),
-                instance_validation_layers,
-                instance_layer_count, instance_layers.get());
-        if (validation_found) {
-            _enabled_layer_count =
-                ARRAY_SIZE(instance_validation_layers_alt1);
-            _enalble_layers[0] = "VK_LAYER_LUNARG_standard_validation";
-            validation_layer_count = 1;
-        }
-        else {
-            // use alternative set of validation layers
-            instance_validation_layers =
-                instance_validation_layers_alt2;
-            _enabled_layer_count =
-                ARRAY_SIZE(instance_validation_layers_alt2);
-            validation_found = check_layers(
-                ARRAY_SIZE(instance_validation_layers_alt2),
-                instance_validation_layers, instance_layer_count,
-                instance_layers.get());
-            validation_layer_count =
-                ARRAY_SIZE(instance_validation_layers_alt2);
-            for (uint32_t i = 0; i < validation_layer_count; i++) {
-                _enalble_layers[i] = instance_validation_layers[i];
-            }
-        }
-    }
-
-    if (!validation_found) {
-        return false;
-    }
-
-    return true;
-
-}
 
 void Demo::init_vk()
 {
-    char const *const *instance_validation_layers = nullptr;
-    enabled_extension_count = 0;
-    enabled_layer_count = 0;
 
+    /* Look for validation layer */
+    enabled_layer_count_ = 0;
     if (validate_) {
-        if (!init_vk_validation(instance_validation_layers, enabled_layer_count, enabled_layers)) {
+        if (!vkUtil::find_validation_layer(enabled_layer_count_, enabled_layers_)) {
             ERR_EXIT("vkEnumerateInstanceLayerProperties failed to find "
                 "required validation layer.\n\n"
                 "Please look at the Getting Started guide for "
                 "additional information.\n",
-                "vkCreateInstance Failure");
+                "Validation Finding Failure");
         }
     }
 
     /* Look for instance extensions */
-    uint32_t instance_extension_count = 0;
-    vk::Bool32 surfaceExtFound = VK_FALSE;
-    vk::Bool32 platformSurfaceExtFound = VK_FALSE;
+    enabled_extension_count = 0;
 
-    memset(extension_names, 0, sizeof(extension_names));
+    bool surfaceExtFound = false;
+    bool platformSurfaceExtFound = false;
+    bool debugReportExtFound = false;
 
-    auto result = vk::enumerateInstanceExtensionProperties(
-        nullptr, &instance_extension_count, nullptr);
-    VERIFY(result == vk::Result::eSuccess);
+    vkUtil::find_extensions(
+        enabled_extension_count, 
+        extension_names,
+        surfaceExtFound,
+        platformSurfaceExtFound,
+        debugReportExtFound
+        );
 
-    if (instance_extension_count > 0) {
-        std::unique_ptr<vk::ExtensionProperties[]> instance_extensions(
-            new vk::ExtensionProperties[instance_extension_count]);
-        result = vk::enumerateInstanceExtensionProperties(
-            nullptr, &instance_extension_count, instance_extensions.get());
-        VERIFY(result == vk::Result::eSuccess);
-
-        for (uint32_t i = 0; i < instance_extension_count; i++) {
-            if (!strcmp(VK_KHR_SURFACE_EXTENSION_NAME,
-                instance_extensions[i].extensionName)) {
-                surfaceExtFound = 1;
-                extension_names[enabled_extension_count++] =
-                    VK_KHR_SURFACE_EXTENSION_NAME;
-            }
-            if (!strcmp(VK_KHR_WIN32_SURFACE_EXTENSION_NAME,
-                instance_extensions[i].extensionName)) {
-                platformSurfaceExtFound = 1;
-                extension_names[enabled_extension_count++] =
-                    VK_KHR_WIN32_SURFACE_EXTENSION_NAME;
-            }
-            assert(enabled_extension_count < 64);
-        }
-    }
 
     if (!surfaceExtFound) {
         ERR_EXIT("vkEnumerateInstanceExtensionProperties failed to find "
@@ -278,7 +160,7 @@ void Demo::init_vk()
             "driver (ICD) installed?\n"
             "Please look at the Getting Started guide for additional "
             "information.\n",
-            "vkCreateInstance Failure");
+            "Ext Finding Failure");
     }
 
     if (!platformSurfaceExtFound) {
@@ -289,8 +171,10 @@ void Demo::init_vk()
             "driver (ICD) installed?\n"
             "Please look at the Getting Started guide for additional "
             "information.\n",
-            "vkCreateInstance Failure");
+            "Ext Finding Failure");
     }
+
+
 
     auto const app = vk::ApplicationInfo()
         .setPApplicationName(name_)
@@ -301,12 +185,12 @@ void Demo::init_vk()
     auto const inst_info =
         vk::InstanceCreateInfo()
         .setPApplicationInfo(&app)
-        .setEnabledLayerCount(enabled_layer_count)
-        .setPpEnabledLayerNames(instance_validation_layers)
+        .setEnabledLayerCount(enabled_layer_count_)
+        .setPpEnabledLayerNames(enabled_layers_) //instance_validation_layers)
         .setEnabledExtensionCount(enabled_extension_count)
         .setPpEnabledExtensionNames(extension_names);
 
-    result = vk::createInstance(&inst_info, nullptr, &inst);
+    auto result = vk::createInstance(&inst_info, nullptr, &inst);
     if (result == vk::Result::eErrorIncompatibleDriver) {
         ERR_EXIT("Cannot find a compatible Vulkan installable client "
             "driver (ICD).\n\n"
@@ -327,6 +211,12 @@ void Demo::init_vk()
             "information.\n",
             "vkCreateInstance Failure");
     }
+
+#ifdef _DEBUG
+    if (debugReportExtFound) {
+        vkUtil::init_debug_report_callback(inst);
+    }
+#endif
 
     /* Make initial call to query gpu_count, then second call for gpu info*/
     uint32_t gpu_count;
