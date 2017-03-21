@@ -1,4 +1,5 @@
 #include "util_valkan.h"
+#include "DebugConsole.h"
 
 
 #define ARRAY_SIZE(a) (sizeof(a) / sizeof(a[0]))
@@ -191,7 +192,7 @@ VKAPI_ATTR VkBool32 VKAPI_CALL MyDebugReportCallback(
     const char*                 pMessage,
     void*                       pUserData)
 {
-    printf("Error! MyDebugReportCallback : %s\n", pMessage);
+    DC_PRINT("Error! MyDebugReportCallback : %s\n", pMessage);
 
     return VK_FALSE; /* not abort */
 }
@@ -277,7 +278,7 @@ vkUtil::find_swapchain_in_device_extensions(
 
         for (uint32_t i = 0; i < device_extension_count; i++) {
 
-            printf("%d: %s\n", i, dev_extensions[i].extensionName);
+            DC_PRINT("%d: %s\n", i, dev_extensions[i].extensionName);
 
             if (!strcmp(VK_KHR_SWAPCHAIN_EXTENSION_NAME,
                 dev_extensions[i].extensionName)) {

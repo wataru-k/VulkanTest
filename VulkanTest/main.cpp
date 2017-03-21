@@ -3,7 +3,15 @@
 #include "CmdLineArgs.h"
 #include "Demo.h"
 
+#include "DebugConsole.h"
+
+
 #define APP_SHORT_NAME "VulkanTest"
+
+
+
+
+
 
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR pCmdLine, int nCmdShow)
 {
@@ -11,6 +19,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR pCmdLine,
     GlfwManager glfw;
     Demo demo;
 
+    DebugConsole::Init();
 
     demo.init(args.argc(), args.argv(), APP_SHORT_NAME);
 
@@ -32,6 +41,8 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR pCmdLine,
     }
     demo.cleanup();
 
+
+    DebugConsole::Term();
 
     glfw.finalize();
 
