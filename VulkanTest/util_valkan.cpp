@@ -9,6 +9,14 @@
 #define VERIFY(x) ((void)(x))
 #endif
 
+template<typename T> class TempArray {
+private:
+    std::unique_ptr<T[]> ptr_;
+public:
+    TempArray<T>(int count) { ptr_.reset(new T[count]); }
+    T* get() { return ptr_.get(); }
+    T operator [](int i) const { return ptr_[i]; }
+};
 
 //
 //returns VK_TRUE when All check_names are found
@@ -54,7 +62,7 @@ vkUtil::find_validation_layer(
         _enabled_layers[i] = nullptr;
     }
 
-    uint32_t instance_layer_count = 0;
+    uint32_t layer_count = 0;
     uint32_t validation_layer_count = 0;
 
     static char const *const instance_validation_layers_alt1[] = {
@@ -70,53 +78,47 @@ vkUtil::find_validation_layer(
         "VK_LAYER_GOOGLE_unique_objects" };
 
     // Look for validation layers
-    char const *const *  instance_validation_layers = nullptr;
 
     vk::Bool32 validation_found = VK_FALSE;
 
-    auto result = vk::enumerateInstanceLayerProperties(&instance_layer_count, nullptr);
+    auto result = vk::enumerateInstanceLayerProperties(&layer_count, nullptr);
     VERIFY(result == vk::Result::eSuccess);
 
-    instance_validation_layers = instance_validation_layers_alt1;
+    if (layer_count > 0) {
+        TempArray<vk::LayerProperties> layers(layer_count);
 
-    if (instance_layer_count > 0) {
-        std::unique_ptr<vk::LayerProperties[]>
-            instance_layers(new vk::LayerProperties[instance_layer_count]);
-
-        result = vk::enumerateInstanceLayerProperties(&instance_layer_count, instance_layers.get());
+        result = vk::enumerateInstanceLayerProperties(&layer_count, layers.get());
         VERIFY(result == vk::Result::eSuccess);
 
-        validation_found =
-            check_layers(
-                ARRAY_SIZE(instance_validation_layers_alt1),
-                instance_validation_layers,
-                instance_layer_count, instance_layers.get());
+        validation_found = check_layers(
+            ARRAY_SIZE(instance_validation_layers_alt1),
+            instance_validation_layers_alt1,
+            layer_count, layers.get());
 
         if (validation_found) {
             _enabled_layer_count =
                 ARRAY_SIZE(instance_validation_layers_alt1);
-            _enabled_layers[0] = "VK_LAYER_LUNARG_standard_validation";
-            validation_layer_count = 1;
+            _enabled_layers[0] = instance_validation_layers_alt1[0];
         }
         else {
             // use alternative set of validation layers
-            instance_validation_layers =
-                instance_validation_layers_alt2;
-            _enabled_layer_count =
-                ARRAY_SIZE(instance_validation_layers_alt2);
+
             validation_found = check_layers(
                 ARRAY_SIZE(instance_validation_layers_alt2),
-                instance_validation_layers, instance_layer_count,
-                instance_layers.get());
-            validation_layer_count =
-                ARRAY_SIZE(instance_validation_layers_alt2);
-            for (uint32_t i = 0; i < validation_layer_count; i++) {
-                _enabled_layers[i] = instance_validation_layers[i];
+                instance_validation_layers_alt2, 
+                layer_count, layers.get());
+
+            if (validation_found) {
+                _enabled_layer_count =
+                    ARRAY_SIZE(instance_validation_layers_alt2);
+                for (uint32_t i = 0; i < ARRAY_SIZE(instance_validation_layers_alt2); i++) {
+                    _enabled_layers[i] = instance_validation_layers_alt2[i];
+                }
             }
         }
     }
 
-    return (bool)validation_found;
+    return validation_found ? true : false;
 }
 
 
@@ -128,45 +130,47 @@ vkUtil::find_validation_layer(
 //[out] _debugReportExtFound VK_EXT_DEBUG_REPORT_EXTENSION_NAME‚ª—LŒø‚È‚çTrue
 //
 void
-vkUtil::find_extensions(
+vkUtil::find_instance_extensions(
     uint32_t &_enabled_extension_count,
     const char *_extension_names[64],
     bool & _surfaceExtFound,
     bool & _platformSurfaceExtFound,
     bool & _debugReportExtFound)
 {
-    uint32_t instance_extension_count = 0;
+    uint32_t extension_count = 0;
 
     for (int i = 0; i < 64; i++) {
         _extension_names[i] = nullptr;
     }
+    _surfaceExtFound = false;
+    _platformSurfaceExtFound = false;
+    _debugReportExtFound = false;
 
-    auto result = vk::enumerateInstanceExtensionProperties(nullptr, &instance_extension_count, nullptr);
+    auto result = vk::enumerateInstanceExtensionProperties(nullptr, &extension_count, nullptr);
     VERIFY(result == vk::Result::eSuccess);
 
-    if (instance_extension_count > 0) {
-        std::unique_ptr<vk::ExtensionProperties[]> instance_extensions(
-            new vk::ExtensionProperties[instance_extension_count]);
+    if (extension_count > 0) {
+        TempArray<vk::ExtensionProperties> extensions(extension_count);
 
         result = vk::enumerateInstanceExtensionProperties(
-            nullptr, &instance_extension_count, instance_extensions.get());
+            nullptr, &extension_count, extensions.get());
         VERIFY(result == vk::Result::eSuccess);
 
-        for (uint32_t i = 0; i < instance_extension_count; i++) {
+        for (uint32_t i = 0; i < extension_count; i++) {
             if (!strcmp(VK_KHR_SURFACE_EXTENSION_NAME,
-                instance_extensions[i].extensionName)) {
+                extensions[i].extensionName)) {
                 _surfaceExtFound = true;
                 _extension_names[_enabled_extension_count++] =
                     VK_KHR_SURFACE_EXTENSION_NAME;
             }
             else if (!strcmp(VK_KHR_WIN32_SURFACE_EXTENSION_NAME,
-                instance_extensions[i].extensionName)) {
+                extensions[i].extensionName)) {
                 _platformSurfaceExtFound = true;
                 _extension_names[_enabled_extension_count++] =
                     VK_KHR_WIN32_SURFACE_EXTENSION_NAME;
             }
             else if (!strcmp(VK_EXT_DEBUG_REPORT_EXTENSION_NAME,
-                instance_extensions[i].extensionName)) {
+                extensions[i].extensionName)) {
                 _debugReportExtFound = true;
                 _extension_names[_enabled_extension_count++] =
                     VK_EXT_DEBUG_REPORT_EXTENSION_NAME;
@@ -188,7 +192,8 @@ VKAPI_ATTR VkBool32 VKAPI_CALL MyDebugReportCallback(
     void*                       pUserData)
 {
     printf("Error! MyDebugReportCallback : %s\n", pMessage);
-    return VK_FALSE;
+
+    return VK_FALSE; /* not abort */
 }
 
 void vkUtil::init_debug_report_callback(vk::Instance &instance)
@@ -222,4 +227,67 @@ void vkUtil::init_debug_report_callback(vk::Instance &instance)
 
     //vk::DebugReportCallbackCreateInfoEXT().setSType(eDebugReportCallbackCreateInfoEXT)
 
+}
+
+
+
+bool vkUtil::find_first_physical_device(vk::Instance &inst, vk::PhysicalDevice &gpu)
+{
+    /* Make initial call to query gpu_count, then second call for gpu info*/
+
+    uint32_t gpu_count;
+    auto result = inst.enumeratePhysicalDevices(&gpu_count, nullptr);
+    VERIFY(result == vk::Result::eSuccess);
+    assert(gpu_count > 0);
+
+    if (gpu_count > 0) {
+        TempArray<vk::PhysicalDevice> phyDev(gpu_count);
+        auto result = inst.enumeratePhysicalDevices(&gpu_count, phyDev.get());
+        VERIFY(result == vk::Result::eSuccess);
+        gpu = phyDev[0];
+    }
+
+    return gpu_count > 0;
+}
+
+bool
+vkUtil::find_swapchain_in_device_extensions(
+    vk::PhysicalDevice &_phyDev,
+    uint32_t &_enabled_extension_count,
+    const char *_extension_names[64])
+{
+    bool swapChainExtFound = false;
+    uint32_t device_extension_count = 0;
+
+    _enabled_extension_count = 0;
+    memset(_extension_names, 0, sizeof(_extension_names));
+
+    auto result = _phyDev.enumerateDeviceExtensionProperties(
+        nullptr, &device_extension_count, nullptr);
+    VERIFY(result == vk::Result::eSuccess);
+
+
+    if (device_extension_count > 0) {
+        TempArray<vk::ExtensionProperties> dev_extensions(device_extension_count);
+
+        result = _phyDev.enumerateDeviceExtensionProperties(
+            nullptr, &device_extension_count, dev_extensions.get());
+        VERIFY(result == vk::Result::eSuccess);
+
+
+        for (uint32_t i = 0; i < device_extension_count; i++) {
+
+            printf("%d: %s\n", i, dev_extensions[i].extensionName);
+
+            if (!strcmp(VK_KHR_SWAPCHAIN_EXTENSION_NAME,
+                dev_extensions[i].extensionName)) {
+                swapChainExtFound = true;
+                _extension_names[_enabled_extension_count++] =
+                    VK_KHR_SWAPCHAIN_EXTENSION_NAME;
+            }
+            assert(_enabled_extension_count < 64);
+        }
+    }
+
+    return swapChainExtFound;
 }

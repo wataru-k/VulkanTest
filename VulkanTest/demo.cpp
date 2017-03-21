@@ -144,7 +144,7 @@ void Demo::init_vk()
     bool platformSurfaceExtFound = false;
     bool debugReportExtFound = false;
 
-    vkUtil::find_extensions(
+    vkUtil::find_instance_extensions(
         enabled_extension_count, 
         extension_names,
         surfaceExtFound,
@@ -218,6 +218,7 @@ void Demo::init_vk()
     }
 #endif
 
+#if 0
     /* Make initial call to query gpu_count, then second call for gpu info*/
     uint32_t gpu_count;
     result = inst.enumeratePhysicalDevices(&gpu_count, nullptr);
@@ -242,8 +243,20 @@ void Demo::init_vk()
             "information.\n",
             "vkEnumeratePhysicalDevices Failure");
     }
+#else
+    if (!vkUtil::find_first_physical_device(inst, gpu)) {
+        ERR_EXIT("vkEnumeratePhysicalDevices reported zero accessible "
+            "devices.\n\n"
+            "Do you have a compatible Vulkan installable client "
+            "driver (ICD) installed?\n"
+            "Please look at the Getting Started guide for additional "
+            "information.\n",
+            "vkEnumeratePhysicalDevices Failure");
+    }
+#endif
 
     /* Look for device extensions */
+#if 0
     uint32_t device_extension_count = 0;
     vk::Bool32 swapchainExtFound = VK_FALSE;
     enabled_extension_count = 0;
@@ -270,6 +283,10 @@ void Demo::init_vk()
             assert(enabled_extension_count < 64);
         }
     }
+#else
+    //
+    bool swapchainExtFound = vkUtil::find_swapchain_in_device_extensions(gpu, enabled_extension_count, extension_names);
+#endif
 
     if (!swapchainExtFound) {
         ERR_EXIT("vkEnumerateDeviceExtensionProperties failed to find "
@@ -405,6 +422,11 @@ void Demo::create_device()
         .setPpEnabledExtensionNames(
             (const char *const *)extension_names)
         .setPEnabledFeatures(nullptr);
+
+#ifdef _DEBUG
+    static char const *const device_layer_standard_validation[] = {"VK_LAYER_LUNARG_standard_validation" };
+    deviceInfo.setEnabledLayerCount(1).setPpEnabledLayerNames(device_layer_standard_validation);
+#endif
 
     if (separate_present_queue) {
         queues[1].setQueueFamilyIndex(present_queue_family_index);
