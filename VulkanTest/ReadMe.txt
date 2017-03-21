@@ -9,5 +9,8 @@ This is a test code for learning Vulkan !
 3. Supports only Win32 platform. (I will remove any codes for other platform positively due to no testing).
 
 
+How to build
+
+1. It is needed to set enviroment value named "GLFW_PATH" as c:\glfw-3.2.1.bin.WIN64
 
 
