@@ -156,10 +156,13 @@ private:
     char const *enabled_layers_[64]; //有効化レイヤー名の配列。
 
 
+    uint32_t queue_family_count;
+    std::unique_ptr<vk::QueueFamilyProperties[]> queue_props;
+
     vk::SurfaceKHR surface;
+
     bool prepared;
     bool use_staging_buffer;
-    bool use_xlib;
     bool separate_present_queue;
 
     vk::Instance inst;
@@ -173,7 +176,6 @@ private:
     vk::Semaphore draw_complete_semaphores[FRAME_LAG];
     vk::Semaphore image_ownership_semaphores[FRAME_LAG];
     vk::PhysicalDeviceProperties gpu_props;
-    std::unique_ptr<vk::QueueFamilyProperties[]> queue_props;
     vk::PhysicalDeviceMemoryProperties memory_properties;
 
     uint32_t enabled_extension_count;
@@ -241,7 +243,6 @@ private:
     bool suppress_popups;
 
     uint32_t current_buffer;
-    uint32_t queue_family_count;
 };
 
 

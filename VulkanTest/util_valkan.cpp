@@ -10,6 +10,9 @@
 #define VERIFY(x) ((void)(x))
 #endif
 
+
+
+
 template<typename T> class TempArray {
 private:
     std::unique_ptr<T[]> ptr_;
@@ -291,4 +294,75 @@ vkUtil::find_swapchain_in_device_extensions(
     }
 
     return swapChainExtFound;
+}
+
+void vkUtil::createWin32Surface(vk::Instance &inst, HINSTANCE hinst, HWND hwnd, vk::SurfaceKHR &out)
+{
+    // Create a WSI surface for the window:
+    //VK_USE_PLATFORM_WIN32_KHR)
+    auto const createInfo = vk::Win32SurfaceCreateInfoKHR()
+        .setHinstance(hinst)
+        .setHwnd(hwnd);
+
+    auto result = inst.createWin32SurfaceKHR(&createInfo, nullptr, &out);
+    VERIFY(result == vk::Result::eSuccess);
+}
+
+//[out] graphic_qfi, present_qfi
+void vkUtil::findQueueFamilyIndeciesForGraphicsAndPresent(
+    vk::PhysicalDevice &gpu,
+    vk::SurfaceKHR &surface,
+    int qfc,
+    const vk::QueueFamilyProperties *qfProps,
+    uint32_t &graphic_qfi,
+    uint32_t &preset_qfi
+    )
+{
+
+    // Iterate over each queue to learn whether it supports presenting:
+    std::unique_ptr<vk::Bool32[]> supportsPresent(
+        new vk::Bool32[qfc]);
+    for (uint32_t i = 0; i < qfc; i++) {
+        gpu.getSurfaceSupportKHR(i, surface, &supportsPresent[i]);
+    }
+
+    uint32_t graphicsQueueFamilyIndex = UINT32_MAX;
+    uint32_t presentQueueFamilyIndex = UINT32_MAX;
+    for (uint32_t i = 0; i < qfc; i++) {
+        if (qfProps[i].queueFlags & vk::QueueFlagBits::eGraphics) {
+            if (graphicsQueueFamilyIndex == UINT32_MAX) {
+                graphicsQueueFamilyIndex = i;
+            }
+
+            if (supportsPresent[i] == VK_TRUE) {
+                graphicsQueueFamilyIndex = i;
+                presentQueueFamilyIndex = i;
+                break;
+            }
+        }
+    }
+
+    if (presentQueueFamilyIndex == UINT32_MAX) {
+        // If didn't find a queue that supports both graphics and present,
+        // then
+        // find a separate present queue.
+        for (uint32_t i = 0; i < qfc; ++i) {
+            if (supportsPresent[i] == VK_TRUE) {
+                presentQueueFamilyIndex = i;
+                break;
+            }
+        }
+    }
+
+    // Generate error if could not find both a graphics and a present queue
+    if (graphicsQueueFamilyIndex == UINT32_MAX ||
+        presentQueueFamilyIndex == UINT32_MAX) {
+
+        DC_PRINT("Could not find both graphics and present queues\n"
+            "Swapchain Initialization Failure");
+    }
+
+    graphic_qfi = graphicsQueueFamilyIndex;
+    preset_qfi = presentQueueFamilyIndex;
+
 }

@@ -54,4 +54,20 @@ namespace vkUtil {
         uint32_t &_enabled_extension_count,
         const char *_extension_names[64]);
 
+
+    //(Win32)サーフェイスの生成。
+    //[out] surface
+    void createWin32Surface(vk::Instance &inst, HINSTANCE hinst, HWND hwnd, vk::SurfaceKHR &surface);
+
+
+    //[out] graphic_qfi, present_qfi
+    void findQueueFamilyIndeciesForGraphicsAndPresent(
+        vk::PhysicalDevice &gpu,
+        vk::SurfaceKHR &surface,
+        int qfCount,
+        const vk::QueueFamilyProperties *qfProps,
+        uint32_t &graphic_qfi,
+        uint32_t &preset_qfi);
+
+
 }

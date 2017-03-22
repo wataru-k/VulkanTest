@@ -37,7 +37,7 @@ Demo::Demo()
     :
     connection_{ nullptr },
     window{ nullptr },
-    prepared{ false }, use_staging_buffer{ false }, use_xlib{ false },
+    prepared{ false }, use_staging_buffer{ false },
     graphics_queue_family_index{ 0 }, present_queue_family_index{ 0 },
     enabled_extension_count{ 0 },
     enabled_layer_count_{ 0 },
@@ -65,7 +65,6 @@ void Demo::init(int argc, char **argv, const char *appName)
     strncpy(name_, "VulkanTest", APP_NAME_STR_LEN);
 
     frameCount = UINT32_MAX;
-    use_xlib = false;
 
     for (int i = 1; i < argc; i++) {
         if (strcmp(argv[i], "--use_staging") == 0) {
@@ -174,8 +173,6 @@ void Demo::init_vk()
             "Ext Finding Failure");
     }
 
-
-
     auto const app = vk::ApplicationInfo()
         .setPApplicationName(name_)
         .setApplicationVersion(0)
@@ -218,32 +215,6 @@ void Demo::init_vk()
     }
 #endif
 
-#if 0
-    /* Make initial call to query gpu_count, then second call for gpu info*/
-    uint32_t gpu_count;
-    result = inst.enumeratePhysicalDevices(&gpu_count, nullptr);
-    VERIFY(result == vk::Result::eSuccess);
-    assert(gpu_count > 0);
-
-    if (gpu_count > 0) {
-        std::unique_ptr<vk::PhysicalDevice[]> physical_devices(
-            new vk::PhysicalDevice[gpu_count]);
-        result = inst.enumeratePhysicalDevices(&gpu_count,
-            physical_devices.get());
-        VERIFY(result == vk::Result::eSuccess);
-        /* For cube demo we just grab the first physical device */
-        gpu = physical_devices[0];
-    }
-    else {
-        ERR_EXIT("vkEnumeratePhysicalDevices reported zero accessible "
-            "devices.\n\n"
-            "Do you have a compatible Vulkan installable client "
-            "driver (ICD) installed?\n"
-            "Please look at the Getting Started guide for additional "
-            "information.\n",
-            "vkEnumeratePhysicalDevices Failure");
-    }
-#else
     if (!vkUtil::find_first_physical_device(inst, gpu)) {
         ERR_EXIT("vkEnumeratePhysicalDevices reported zero accessible "
             "devices.\n\n"
@@ -253,40 +224,11 @@ void Demo::init_vk()
             "information.\n",
             "vkEnumeratePhysicalDevices Failure");
     }
-#endif
 
     /* Look for device extensions */
-#if 0
-    uint32_t device_extension_count = 0;
-    vk::Bool32 swapchainExtFound = VK_FALSE;
-    enabled_extension_count = 0;
-    memset(extension_names, 0, sizeof(extension_names));
-
-    result = gpu.enumerateDeviceExtensionProperties(
-        nullptr, &device_extension_count, nullptr);
-    VERIFY(result == vk::Result::eSuccess);
-
-    if (device_extension_count > 0) {
-        std::unique_ptr<vk::ExtensionProperties[]> device_extensions(
-            new vk::ExtensionProperties[device_extension_count]);
-        result = gpu.enumerateDeviceExtensionProperties(
-            nullptr, &device_extension_count, device_extensions.get());
-        VERIFY(result == vk::Result::eSuccess);
-
-        for (uint32_t i = 0; i < device_extension_count; i++) {
-            if (!strcmp(VK_KHR_SWAPCHAIN_EXTENSION_NAME,
-                device_extensions[i].extensionName)) {
-                swapchainExtFound = 1;
-                extension_names[enabled_extension_count++] =
-                    VK_KHR_SWAPCHAIN_EXTENSION_NAME;
-            }
-            assert(enabled_extension_count < 64);
-        }
-    }
-#else
-    //
-    bool swapchainExtFound = vkUtil::find_swapchain_in_device_extensions(gpu, enabled_extension_count, extension_names);
-#endif
+    bool swapchainExtFound = 
+        vkUtil::find_swapchain_in_device_extensions(
+            gpu, enabled_extension_count, extension_names);
 
     if (!swapchainExtFound) {
         ERR_EXIT("vkEnumerateDeviceExtensionProperties failed to find "
@@ -663,6 +605,9 @@ void Demo::init_vk_swapchain(HINSTANCE hinst, HWND hwnd)
     connection_ = hinst;
     window = hwnd;
 
+#if 1
+    vkUtil::createWin32Surface(inst, connection_, window, surface);
+#else
     // Create a WSI surface for the window:
     //VK_USE_PLATFORM_WIN32_KHR)
     {
@@ -670,11 +615,18 @@ void Demo::init_vk_swapchain(HINSTANCE hinst, HWND hwnd)
             .setHinstance(connection_)
             .setHwnd(window);
 
-        auto result =
-            inst.createWin32SurfaceKHR(&createInfo, nullptr, &surface);
+        auto result = inst.createWin32SurfaceKHR(&createInfo, nullptr, &surface);
         VERIFY(result == vk::Result::eSuccess);
     }
+#endif
 
+#if 1
+    vkUtil::findQueueFamilyIndeciesForGraphicsAndPresent(
+        gpu, surface, 
+        queue_family_count, queue_props.get(), //&queue_props[0], 
+        graphics_queue_family_index, present_queue_family_index);
+
+#else
     // Iterate over each queue to learn whether it supports presenting:
     std::unique_ptr<vk::Bool32[]> supportsPresent(
         new vk::Bool32[queue_family_count]);
@@ -719,6 +671,8 @@ void Demo::init_vk_swapchain(HINSTANCE hinst, HWND hwnd)
 
     graphics_queue_family_index = graphicsQueueFamilyIndex;
     present_queue_family_index = presentQueueFamilyIndex;
+#endif
+
     separate_present_queue =
         (graphics_queue_family_index != present_queue_family_index);
 
