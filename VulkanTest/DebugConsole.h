@@ -1,7 +1,7 @@
 #pragma once
 
 
-#define DC_OPEN_WINDOW 1 //デバッグコンソールを別ウインドウで開いて出力。
+#define DC_OPEN_WINDOW 1 //デバッグコンソールを別ウインドウで開いて出力 or アウトプットウインドウへ出力。
 
 namespace DebugConsole {
 

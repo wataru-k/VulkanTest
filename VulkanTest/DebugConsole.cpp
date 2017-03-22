@@ -62,8 +62,8 @@ void DebugConsole::Print(const char* format, ...)
 
     HANDLE ConsoleOutput = GetStdHandle(STD_OUTPUT_HANDLE);
     DWORD CharsWritten;
-    int len = strlen(s_printf_buf);
-    WriteConsole(ConsoleOutput, s_printf_buf, len, &CharsWritten, 0);
+    size_t len = strlen(s_printf_buf);
+    WriteConsole(ConsoleOutput, s_printf_buf, (DWORD)len, &CharsWritten, 0);
 #endif
 }
 
