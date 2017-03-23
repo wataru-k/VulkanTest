@@ -62,21 +62,18 @@ public:
     //#1
     void init(int argc, char** argv, const char* name);
 
-    //#1
+    //#2
     void init_vk_swapchain(HINSTANCE inst, HWND wnd);
 
 private:
 
-
+    //call from init()
     void init_vk();
 
 public:
     void build_image_ownership_cmd(uint32_t const &i);
 
-
     void cleanup();
-
-    void create_device();
 
     void destroy_texture_image(texture_object *tex_objs);
 
@@ -85,9 +82,6 @@ public:
     void draw_build_cmd(vk::CommandBuffer commandBuffer);
 
     void flush_init_cmd();
-
-
-
 
     void prepare();
 

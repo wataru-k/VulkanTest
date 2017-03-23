@@ -123,7 +123,6 @@ void Demo::init(int argc, char **argv, const char *appName)
 
 void Demo::init_vk()
 {
-
     /* Look for validation layer */
     enabled_layer_count_ = 0;
     if (validate_) {
@@ -257,6 +256,99 @@ void Demo::init_vk()
 }
 
 
+void Demo::init_vk_swapchain(HINSTANCE hinst, HWND hwnd)
+{
+    connection_ = hinst;
+    window = hwnd;
+
+    //Create Win32Surface
+    //TODO: class and method : surface = inst->func(hinst, hwnd)
+    vkUtil::createWin32Surface(inst, connection_, window, surface);
+
+    //Find graphics and present queue family index
+    vkUtil::findQueueFamilyIndeciesForGraphicsAndPresent(
+        gpu, surface,
+        queue_family_count, queue_props.get(),
+        graphics_queue_family_index,
+        present_queue_family_index,
+        separate_present_queue);
+
+    //Create logical device
+    vkUtil::createDevice(
+        gpu,
+        graphics_queue_family_index,
+        present_queue_family_index,
+        separate_present_queue,
+        enabled_extension_count,
+        extension_names,
+        device);
+
+    device.getQueue(graphics_queue_family_index, 0, &graphics_queue);
+    if (!separate_present_queue) {
+        present_queue = graphics_queue;
+    }
+    else {
+        device.getQueue(present_queue_family_index, 0, &present_queue);
+    }
+
+    // Get the list of VkFormat's that are supported:
+    uint32_t formatCount;
+    auto result = gpu.getSurfaceFormatsKHR(surface, &formatCount, nullptr);
+    VERIFY(result == vk::Result::eSuccess);
+
+    std::unique_ptr<vk::SurfaceFormatKHR[]> surfFormats(
+        new vk::SurfaceFormatKHR[formatCount]);
+    result =
+        gpu.getSurfaceFormatsKHR(surface, &formatCount, surfFormats.get());
+    VERIFY(result == vk::Result::eSuccess);
+
+    // If the format list includes just one entry of VK_FORMAT_UNDEFINED,
+    // the surface has no preferred format.  Otherwise, at least one
+    // supported format will be returned.
+    if (formatCount == 1 &&
+        surfFormats[0].format == vk::Format::eUndefined) {
+        format = vk::Format::eB8G8R8A8Unorm;
+    }
+    else {
+        assert(formatCount >= 1);
+        format = surfFormats[0].format;
+    }
+    color_space = surfFormats[0].colorSpace;
+
+    quit = false;
+    curFrame = 0;
+
+    // Create semaphores to synchronize acquiring presentable buffers before
+    // rendering and waiting for drawing to be complete before presenting
+    auto const semaphoreCreateInfo = vk::SemaphoreCreateInfo();
+
+    // Create fences that we can use to throttle if we get too far
+    // ahead of the image presents
+    auto const fence_ci =
+        vk::FenceCreateInfo().setFlags(vk::FenceCreateFlagBits::eSignaled);
+    for (uint32_t i = 0; i < FRAME_LAG; i++) {
+        device.createFence(&fence_ci, nullptr, &fences[i]);
+        result = device.createSemaphore(&semaphoreCreateInfo, nullptr,
+            &image_acquired_semaphores[i]);
+        VERIFY(result == vk::Result::eSuccess);
+
+        result = device.createSemaphore(&semaphoreCreateInfo, nullptr,
+            &draw_complete_semaphores[i]);
+        VERIFY(result == vk::Result::eSuccess);
+
+        if (separate_present_queue) {
+            result = device.createSemaphore(&semaphoreCreateInfo, nullptr,
+                &image_ownership_semaphores[i]);
+            VERIFY(result == vk::Result::eSuccess);
+        }
+    }
+    frame_index = 0;
+
+    // Get Memory information and properties
+    gpu.getMemoryProperties(&memory_properties);
+}
+
+
 void Demo::build_image_ownership_cmd(uint32_t const &i) 
 {
     auto const cmd_buf_info = vk::CommandBufferBeginInfo().setFlags(
@@ -346,40 +438,6 @@ void Demo::cleanup()
     inst.destroy(nullptr);
 }
 
-void Demo::create_device() 
-{
-    float const priorities[1] = { 0.0 };
-
-    vk::DeviceQueueCreateInfo queues[2];
-    queues[0].setQueueFamilyIndex(graphics_queue_family_index);
-    queues[0].setQueueCount(1);
-    queues[0].setPQueuePriorities(priorities);
-
-    auto deviceInfo = vk::DeviceCreateInfo()
-        .setQueueCreateInfoCount(1)
-        .setPQueueCreateInfos(queues)
-        .setEnabledLayerCount(0)
-        .setPpEnabledLayerNames(nullptr)
-        .setEnabledExtensionCount(enabled_extension_count)
-        .setPpEnabledExtensionNames(
-            (const char *const *)extension_names)
-        .setPEnabledFeatures(nullptr);
-
-#ifdef _DEBUG
-    static char const *const device_layer_standard_validation[] = {"VK_LAYER_LUNARG_standard_validation" };
-    deviceInfo.setEnabledLayerCount(1).setPpEnabledLayerNames(device_layer_standard_validation);
-#endif
-
-    if (separate_present_queue) {
-        queues[1].setQueueFamilyIndex(present_queue_family_index);
-        queues[1].setQueueCount(1);
-        queues[1].setPQueuePriorities(priorities);
-        deviceInfo.setQueueCreateInfoCount(2);
-    }
-
-    auto result = gpu.createDevice(&deviceInfo, nullptr, &device);
-    VERIFY(result == vk::Result::eSuccess);
-}
 
 void Demo::destroy_texture_image(texture_object *tex_objs) 
 {
@@ -599,149 +657,6 @@ void Demo::flush_init_cmd()
     cmd = vk::CommandBuffer();
 }
 
-
-void Demo::init_vk_swapchain(HINSTANCE hinst, HWND hwnd)
-{
-    connection_ = hinst;
-    window = hwnd;
-
-#if 1
-    vkUtil::createWin32Surface(inst, connection_, window, surface);
-#else
-    // Create a WSI surface for the window:
-    //VK_USE_PLATFORM_WIN32_KHR)
-    {
-        auto const createInfo = vk::Win32SurfaceCreateInfoKHR()
-            .setHinstance(connection_)
-            .setHwnd(window);
-
-        auto result = inst.createWin32SurfaceKHR(&createInfo, nullptr, &surface);
-        VERIFY(result == vk::Result::eSuccess);
-    }
-#endif
-
-#if 1
-    vkUtil::findQueueFamilyIndeciesForGraphicsAndPresent(
-        gpu, surface, 
-        queue_family_count, queue_props.get(), //&queue_props[0], 
-        graphics_queue_family_index, present_queue_family_index);
-
-#else
-    // Iterate over each queue to learn whether it supports presenting:
-    std::unique_ptr<vk::Bool32[]> supportsPresent(
-        new vk::Bool32[queue_family_count]);
-    for (uint32_t i = 0; i < queue_family_count; i++) {
-        gpu.getSurfaceSupportKHR(i, surface, &supportsPresent[i]);
-    }
-
-    uint32_t graphicsQueueFamilyIndex = UINT32_MAX;
-    uint32_t presentQueueFamilyIndex = UINT32_MAX;
-    for (uint32_t i = 0; i < queue_family_count; i++) {
-        if (queue_props[i].queueFlags & vk::QueueFlagBits::eGraphics) {
-            if (graphicsQueueFamilyIndex == UINT32_MAX) {
-                graphicsQueueFamilyIndex = i;
-            }
-
-            if (supportsPresent[i] == VK_TRUE) {
-                graphicsQueueFamilyIndex = i;
-                presentQueueFamilyIndex = i;
-                break;
-            }
-        }
-    }
-
-    if (presentQueueFamilyIndex == UINT32_MAX) {
-        // If didn't find a queue that supports both graphics and present,
-        // then
-        // find a separate present queue.
-        for (uint32_t i = 0; i < queue_family_count; ++i) {
-            if (supportsPresent[i] == VK_TRUE) {
-                presentQueueFamilyIndex = i;
-                break;
-            }
-        }
-    }
-
-    // Generate error if could not find both a graphics and a present queue
-    if (graphicsQueueFamilyIndex == UINT32_MAX ||
-        presentQueueFamilyIndex == UINT32_MAX) {
-        ERR_EXIT("Could not find both graphics and present queues\n",
-            "Swapchain Initialization Failure");
-    }
-
-    graphics_queue_family_index = graphicsQueueFamilyIndex;
-    present_queue_family_index = presentQueueFamilyIndex;
-#endif
-
-    separate_present_queue =
-        (graphics_queue_family_index != present_queue_family_index);
-
-    create_device();
-
-    device.getQueue(graphics_queue_family_index, 0, &graphics_queue);
-    if (!separate_present_queue) {
-        present_queue = graphics_queue;
-    }
-    else {
-        device.getQueue(present_queue_family_index, 0, &present_queue);
-    }
-
-    // Get the list of VkFormat's that are supported:
-    uint32_t formatCount;
-    auto result = gpu.getSurfaceFormatsKHR(surface, &formatCount, nullptr);
-    VERIFY(result == vk::Result::eSuccess);
-
-    std::unique_ptr<vk::SurfaceFormatKHR[]> surfFormats(
-        new vk::SurfaceFormatKHR[formatCount]);
-    result =
-        gpu.getSurfaceFormatsKHR(surface, &formatCount, surfFormats.get());
-    VERIFY(result == vk::Result::eSuccess);
-
-    // If the format list includes just one entry of VK_FORMAT_UNDEFINED,
-    // the surface has no preferred format.  Otherwise, at least one
-    // supported format will be returned.
-    if (formatCount == 1 &&
-        surfFormats[0].format == vk::Format::eUndefined) {
-        format = vk::Format::eB8G8R8A8Unorm;
-    }
-    else {
-        assert(formatCount >= 1);
-        format = surfFormats[0].format;
-    }
-    color_space = surfFormats[0].colorSpace;
-
-    quit = false;
-    curFrame = 0;
-
-    // Create semaphores to synchronize acquiring presentable buffers before
-    // rendering and waiting for drawing to be complete before presenting
-    auto const semaphoreCreateInfo = vk::SemaphoreCreateInfo();
-
-    // Create fences that we can use to throttle if we get too far
-    // ahead of the image presents
-    auto const fence_ci =
-        vk::FenceCreateInfo().setFlags(vk::FenceCreateFlagBits::eSignaled);
-    for (uint32_t i = 0; i < FRAME_LAG; i++) {
-        device.createFence(&fence_ci, nullptr, &fences[i]);
-        result = device.createSemaphore(&semaphoreCreateInfo, nullptr,
-            &image_acquired_semaphores[i]);
-        VERIFY(result == vk::Result::eSuccess);
-
-        result = device.createSemaphore(&semaphoreCreateInfo, nullptr,
-            &draw_complete_semaphores[i]);
-        VERIFY(result == vk::Result::eSuccess);
-
-        if (separate_present_queue) {
-            result = device.createSemaphore(&semaphoreCreateInfo, nullptr,
-                &image_ownership_semaphores[i]);
-            VERIFY(result == vk::Result::eSuccess);
-        }
-    }
-    frame_index = 0;
-
-    // Get Memory information and properties
-    gpu.getMemoryProperties(&memory_properties);
-}
 
 void Demo::prepare()
 {

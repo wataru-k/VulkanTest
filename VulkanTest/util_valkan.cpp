@@ -315,20 +315,21 @@ void vkUtil::findQueueFamilyIndeciesForGraphicsAndPresent(
     int qfc,
     const vk::QueueFamilyProperties *qfProps,
     uint32_t &graphic_qfi,
-    uint32_t &preset_qfi
+    uint32_t &preset_qfi,
+    bool &separate_present_queue
     )
 {
 
     // Iterate over each queue to learn whether it supports presenting:
-    std::unique_ptr<vk::Bool32[]> supportsPresent(
-        new vk::Bool32[qfc]);
-    for (uint32_t i = 0; i < qfc; i++) {
+    std::unique_ptr<vk::Bool32[]> supportsPresent(new vk::Bool32[qfc]);
+
+    for (int i = 0; i < qfc; i++) {
         gpu.getSurfaceSupportKHR(i, surface, &supportsPresent[i]);
     }
 
     uint32_t graphicsQueueFamilyIndex = UINT32_MAX;
     uint32_t presentQueueFamilyIndex = UINT32_MAX;
-    for (uint32_t i = 0; i < qfc; i++) {
+    for (int i = 0; i < qfc; i++) {
         if (qfProps[i].queueFlags & vk::QueueFlagBits::eGraphics) {
             if (graphicsQueueFamilyIndex == UINT32_MAX) {
                 graphicsQueueFamilyIndex = i;
@@ -344,9 +345,8 @@ void vkUtil::findQueueFamilyIndeciesForGraphicsAndPresent(
 
     if (presentQueueFamilyIndex == UINT32_MAX) {
         // If didn't find a queue that supports both graphics and present,
-        // then
-        // find a separate present queue.
-        for (uint32_t i = 0; i < qfc; ++i) {
+        // then find a separate present queue.
+        for (int i = 0; i < qfc; ++i) {
             if (supportsPresent[i] == VK_TRUE) {
                 presentQueueFamilyIndex = i;
                 break;
@@ -364,5 +364,50 @@ void vkUtil::findQueueFamilyIndeciesForGraphicsAndPresent(
 
     graphic_qfi = graphicsQueueFamilyIndex;
     preset_qfi = presentQueueFamilyIndex;
-
+    separate_present_queue = graphicsQueueFamilyIndex != presentQueueFamilyIndex;
 }
+
+
+void vkUtil::createDevice(
+    vk::PhysicalDevice &in_gpu,
+    uint32_t in_graphic_queue_family_index,
+    uint32_t in_present_queue_family_index,
+    bool in_separate_present_queue,
+    uint32_t in_enabled_extension_count,
+    const char *in_extension_names[64],
+    vk::Device &out_device)
+{
+    float const priorities[1] = { 0.0 };
+
+    vk::DeviceQueueCreateInfo queues[2];
+    queues[0].setQueueFamilyIndex(in_graphic_queue_family_index);
+    queues[0].setQueueCount(1);
+    queues[0].setPQueuePriorities(priorities);
+
+    auto deviceInfo = vk::DeviceCreateInfo()
+        .setQueueCreateInfoCount(1)
+        .setPQueueCreateInfos(queues)
+        .setEnabledLayerCount(0)
+        .setPpEnabledLayerNames(nullptr)
+        .setEnabledExtensionCount(in_enabled_extension_count)
+        .setPpEnabledExtensionNames(
+            (const char *const *)in_extension_names)
+        .setPEnabledFeatures(nullptr);
+
+#ifdef _DEBUG
+    static char const *const device_layer_standard_validation[] = { "VK_LAYER_LUNARG_standard_validation" };
+    deviceInfo.setEnabledLayerCount(1).setPpEnabledLayerNames(device_layer_standard_validation);
+#endif
+
+    if (in_separate_present_queue) {
+        queues[1].setQueueFamilyIndex(in_present_queue_family_index);
+        queues[1].setQueueCount(1);
+        queues[1].setPQueuePriorities(priorities);
+        deviceInfo.setQueueCreateInfoCount(2);
+    }
+
+    auto result = in_gpu.createDevice(&deviceInfo, nullptr, &out_device);
+    VERIFY(result == vk::Result::eSuccess);
+}
+
+

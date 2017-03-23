@@ -56,18 +56,38 @@ namespace vkUtil {
 
 
     //(Win32)サーフェイスの生成。
-    //[out] surface
-    void createWin32Surface(vk::Instance &inst, HINSTANCE hinst, HWND hwnd, vk::SurfaceKHR &surface);
+    void createWin32Surface(vk::Instance &inst, HINSTANCE hinst, HWND hwnd, vk::SurfaceKHR &out_surface);
 
-
-    //[out] graphic_qfi, present_qfi
+    //グラフィックキューファミリを探す。見つけたらさらに、
+    //グラフィックとプレゼントを両方サポートするキューファミリを探す。
+    //無ければ、セパレートプレゼントキューファミリを探す。
+    //[out] out_graphic_queue_family_index: if return UINT32_MAX then no graphic queue.
+    //[out] out_present_queue_family_index : if return UINT32_MAX then no present queue.
+    //[out] out_separete_present_queue    : if graphic and present queue are separated then return true.
     void findQueueFamilyIndeciesForGraphicsAndPresent(
-        vk::PhysicalDevice &gpu,
-        vk::SurfaceKHR &surface,
-        int qfCount,
-        const vk::QueueFamilyProperties *qfProps,
-        uint32_t &graphic_qfi,
-        uint32_t &preset_qfi);
+        vk::PhysicalDevice &in_gpu,
+        vk::SurfaceKHR &in_surface,
+        int in_queue_family_count,
+        const vk::QueueFamilyProperties *queue_family_propaties,
+        uint32_t &out_graphic_queue_family_index,
+        uint32_t &out_preset_queue_family_index,
+        bool &out_separete_present_queue);
 
 
+    // （論理）デバイスの生成。
+    // [in] in_gpu 物理デバイス(GPU)
+    // [in] in_graphic_queue_family_index グラフィックキューファミリのインデックス。
+    // [in] in_present_queue_family_index プレゼントキューファミリのインデックス。
+    // [in] in_separete_present_queue プレゼントキューがグラフィックキューと別かどうか。
+    // [in] in_enabled_extension_count 有効化される拡張機能の数。
+    // [in] in_extension_names　有効化される拡張機能の名前。
+    // [out] out_device 生成されたデバイス。
+    void createDevice(
+        vk::PhysicalDevice &in_gpu,
+        uint32_t in_graphic_queue_family_index,
+        uint32_t in_present_queue_family_index,
+        bool in_separate_present_queue,
+        uint32_t in_enabled_extension_count,
+        const char *in_extension_names[64],
+        vk::Device &out_device);
 }
