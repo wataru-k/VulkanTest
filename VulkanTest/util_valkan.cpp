@@ -411,3 +411,50 @@ void vkUtil::createDevice(
 }
 
 
+// デバイスからキューを取得。
+void vkUtil::getQueue(
+    vk::Device &in_device,
+    uint32_t in_graphic_queue_family_index,
+    uint32_t in_present_queue_family_index,
+    bool in_separate_present_queue,
+    vk::Queue &out_graphics_queue,
+    vk::Queue &out_present_queue)
+{
+    in_device.getQueue(in_graphic_queue_family_index, 0, &out_graphics_queue);
+    if (!in_separate_present_queue) {
+        out_present_queue = out_graphics_queue;
+    }
+    else {
+        in_device.getQueue(in_present_queue_family_index, 0, &out_present_queue);
+    }
+}
+
+//
+void vkUtil::getFormatAndColorSpace(
+    vk::PhysicalDevice &in_gpu,
+    vk::SurfaceKHR &in_surface,
+    vk::Format &out_format,
+    vk::ColorSpaceKHR &out_color_space)
+{
+    // Get the list of VkFormat's that are supported:
+    uint32_t formatCount;
+    auto result = in_gpu.getSurfaceFormatsKHR(in_surface, &formatCount, nullptr);
+    VERIFY(result == vk::Result::eSuccess);
+
+    std::unique_ptr<vk::SurfaceFormatKHR[]> surfFormats(
+        new vk::SurfaceFormatKHR[formatCount]);
+    result = in_gpu.getSurfaceFormatsKHR(in_surface, &formatCount, surfFormats.get());
+    VERIFY(result == vk::Result::eSuccess);
+
+    // If the format list includes just one entry of VK_FORMAT_UNDEFINED,
+    // the surface has no preferred format.  Otherwise, at least one
+    // supported format will be returned.
+    if (formatCount == 1 && surfFormats[0].format == vk::Format::eUndefined) {
+        out_format = vk::Format::eB8G8R8A8Unorm;
+    }
+    else {
+        assert(formatCount >= 1);
+        out_format = surfFormats[0].format;
+    }
+    out_color_space = surfFormats[0].colorSpace;
+}

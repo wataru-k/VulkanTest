@@ -283,37 +283,18 @@ void Demo::init_vk_swapchain(HINSTANCE hinst, HWND hwnd)
         extension_names,
         device);
 
-    device.getQueue(graphics_queue_family_index, 0, &graphics_queue);
-    if (!separate_present_queue) {
-        present_queue = graphics_queue;
-    }
-    else {
-        device.getQueue(present_queue_family_index, 0, &present_queue);
-    }
+    //Get queue from device
+    vkUtil::getQueue(device,
+        graphics_queue_family_index,
+        present_queue_family_index,
+        separate_present_queue,
+        graphics_queue,
+        present_queue);
 
-    // Get the list of VkFormat's that are supported:
-    uint32_t formatCount;
-    auto result = gpu.getSurfaceFormatsKHR(surface, &formatCount, nullptr);
-    VERIFY(result == vk::Result::eSuccess);
+    //サーフェスフォーマットを取得しフォーマットとカラースペースを取得。
+    vkUtil::getFormatAndColorSpace(
+        gpu, surface, format, color_space);
 
-    std::unique_ptr<vk::SurfaceFormatKHR[]> surfFormats(
-        new vk::SurfaceFormatKHR[formatCount]);
-    result =
-        gpu.getSurfaceFormatsKHR(surface, &formatCount, surfFormats.get());
-    VERIFY(result == vk::Result::eSuccess);
-
-    // If the format list includes just one entry of VK_FORMAT_UNDEFINED,
-    // the surface has no preferred format.  Otherwise, at least one
-    // supported format will be returned.
-    if (formatCount == 1 &&
-        surfFormats[0].format == vk::Format::eUndefined) {
-        format = vk::Format::eB8G8R8A8Unorm;
-    }
-    else {
-        assert(formatCount >= 1);
-        format = surfFormats[0].format;
-    }
-    color_space = surfFormats[0].colorSpace;
 
     quit = false;
     curFrame = 0;
@@ -321,6 +302,9 @@ void Demo::init_vk_swapchain(HINSTANCE hinst, HWND hwnd)
     // Create semaphores to synchronize acquiring presentable buffers before
     // rendering and waiting for drawing to be complete before presenting
     auto const semaphoreCreateInfo = vk::SemaphoreCreateInfo();
+
+
+    vk::Result result;
 
     // Create fences that we can use to throttle if we get too far
     // ahead of the image presents
@@ -377,8 +361,6 @@ void Demo::build_image_ownership_cmd(uint32_t const &i)
     result = buffers[i].graphics_to_present_cmd.end();
     VERIFY(result == vk::Result::eSuccess);
 }
-
-
 
 void Demo::cleanup() 
 {
@@ -729,7 +711,8 @@ void Demo::prepare()
     prepared = true;
 }
 
-void Demo::prepare_buffers() {
+void Demo::prepare_buffers() 
+{
     vk::SwapchainKHR oldSwapchain = swapchain;
 
     // Check the surface capabilities and formats

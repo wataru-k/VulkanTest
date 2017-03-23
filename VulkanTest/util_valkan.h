@@ -90,4 +90,24 @@ namespace vkUtil {
         uint32_t in_enabled_extension_count,
         const char *in_extension_names[64],
         vk::Device &out_device);
+
+
+    // デバイスからキューを取得。
+    void getQueue(
+        vk::Device &in_device,
+        uint32_t in_graphic_queue_family_index,
+        uint32_t in_present_queue_family_index,
+        bool in_separate_present_queue,
+        vk::Queue &out_graphics_queue,
+        vk::Queue &out_present_queue);
+
+    //サーフェスフォーマットを取得し
+    // フォーマットとカラースペースを取得。
+    void getFormatAndColorSpace(
+        vk::PhysicalDevice &in_gpu,
+        vk::SurfaceKHR &in_surface,
+        vk::Format &out_format,
+        vk::ColorSpaceKHR &out_color_space);
+
+
 }

@@ -149,36 +149,41 @@ private:
     uint32_t enabled_layer_count_; //有効化レイヤー数。
     char const *enabled_layers_[64]; //有効化レイヤー名の配列。
 
+    uint32_t enabled_extension_count;
+    char const *extension_names[64];
 
     uint32_t queue_family_count;
     std::unique_ptr<vk::QueueFamilyProperties[]> queue_props;
 
     vk::SurfaceKHR surface;
-
-    bool prepared;
-    bool use_staging_buffer;
-    bool separate_present_queue;
-
     vk::Instance inst;
     vk::PhysicalDevice gpu;
+
+    bool separate_present_queue;
+    uint32_t graphics_queue_family_index;
+    uint32_t present_queue_family_index;
+
     vk::Device device;
     vk::Queue graphics_queue;
     vk::Queue present_queue;
-    uint32_t graphics_queue_family_index;
-    uint32_t present_queue_family_index;
+
+    vk::Format format;
+    vk::ColorSpaceKHR color_space;
+
+
+
+    bool prepared;
+    bool use_staging_buffer;
+
     vk::Semaphore image_acquired_semaphores[FRAME_LAG];
     vk::Semaphore draw_complete_semaphores[FRAME_LAG];
     vk::Semaphore image_ownership_semaphores[FRAME_LAG];
     vk::PhysicalDeviceProperties gpu_props;
     vk::PhysicalDeviceMemoryProperties memory_properties;
 
-    uint32_t enabled_extension_count;
-    char const *extension_names[64];
 
     uint32_t width_;
     uint32_t height_;
-    vk::Format format;
-    vk::ColorSpaceKHR color_space;
 
     uint32_t swapchainImageCount;
     vk::SwapchainKHR swapchain;
