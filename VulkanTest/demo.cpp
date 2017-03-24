@@ -299,68 +299,23 @@ void Demo::init_vk_swapchain(HINSTANCE hinst, HWND hwnd)
     quit = false;
     curFrame = 0;
 
-    // Create semaphores to synchronize acquiring presentable buffers before
-    // rendering and waiting for drawing to be complete before presenting
-    auto const semaphoreCreateInfo = vk::SemaphoreCreateInfo();
+    //デバイスからフレームラグ数のフェンスと3種のセマフォを生成する。
+    vkUtil::createFencesAndSemaphores(
+        device,
+        FRAME_LAG,
+        separate_present_queue,
+        fences,
+        image_acquired_semaphores,
+        draw_complete_semaphores,
+        image_ownership_semaphores);
 
 
-    vk::Result result;
-
-    // Create fences that we can use to throttle if we get too far
-    // ahead of the image presents
-    auto const fence_ci =
-        vk::FenceCreateInfo().setFlags(vk::FenceCreateFlagBits::eSignaled);
-    for (uint32_t i = 0; i < FRAME_LAG; i++) {
-        device.createFence(&fence_ci, nullptr, &fences[i]);
-        result = device.createSemaphore(&semaphoreCreateInfo, nullptr,
-            &image_acquired_semaphores[i]);
-        VERIFY(result == vk::Result::eSuccess);
-
-        result = device.createSemaphore(&semaphoreCreateInfo, nullptr,
-            &draw_complete_semaphores[i]);
-        VERIFY(result == vk::Result::eSuccess);
-
-        if (separate_present_queue) {
-            result = device.createSemaphore(&semaphoreCreateInfo, nullptr,
-                &image_ownership_semaphores[i]);
-            VERIFY(result == vk::Result::eSuccess);
-        }
-    }
     frame_index = 0;
 
     // Get Memory information and properties
     gpu.getMemoryProperties(&memory_properties);
 }
 
-
-void Demo::build_image_ownership_cmd(uint32_t const &i) 
-{
-    auto const cmd_buf_info = vk::CommandBufferBeginInfo().setFlags(
-        vk::CommandBufferUsageFlagBits::eSimultaneousUse);
-    auto result = buffers[i].graphics_to_present_cmd.begin(&cmd_buf_info);
-    VERIFY(result == vk::Result::eSuccess);
-
-    auto const image_ownership_barrier =
-        vk::ImageMemoryBarrier()
-        .setSrcAccessMask(vk::AccessFlags())
-        .setDstAccessMask(vk::AccessFlagBits::eColorAttachmentWrite)
-        .setOldLayout(vk::ImageLayout::ePresentSrcKHR)
-        .setNewLayout(vk::ImageLayout::ePresentSrcKHR)
-        .setSrcQueueFamilyIndex(graphics_queue_family_index)
-        .setDstQueueFamilyIndex(present_queue_family_index)
-        .setImage(buffers[i].image)
-        .setSubresourceRange(vk::ImageSubresourceRange(
-            vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1));
-
-    buffers[i].graphics_to_present_cmd.pipelineBarrier(
-        vk::PipelineStageFlagBits::eColorAttachmentOutput,
-        vk::PipelineStageFlagBits::eColorAttachmentOutput,
-        vk::DependencyFlagBits(), 0, nullptr, 0, nullptr, 1,
-        &image_ownership_barrier);
-
-    result = buffers[i].graphics_to_present_cmd.end();
-    VERIFY(result == vk::Result::eSuccess);
-}
 
 void Demo::cleanup() 
 {
@@ -642,17 +597,8 @@ void Demo::flush_init_cmd()
 
 void Demo::prepare()
 {
-    auto const cmd_pool_info =
-        vk::CommandPoolCreateInfo().setQueueFamilyIndex(
-            graphics_queue_family_index);
-    auto result =
-        device.createCommandPool(&cmd_pool_info, nullptr, &cmd_pool);
-    VERIFY(result == vk::Result::eSuccess);
-
-    auto const cmd = vk::CommandBufferAllocateInfo()
-        .setCommandPool(cmd_pool)
-        .setLevel(vk::CommandBufferLevel::ePrimary)
-        .setCommandBufferCount(1);
+    //Create Graphics Command Pool
+    vkUtil::createCommandPool(device, graphics_queue_family_index, cmd_pool);
 
     prepare_buffers();
     prepare_depth();
@@ -663,32 +609,18 @@ void Demo::prepare()
     prepare_render_pass();
     prepare_pipeline();
 
-    for (uint32_t i = 0; i < swapchainImageCount; ++i) {
-        result = device.allocateCommandBuffers(&cmd, &buffers[i].cmd);
-        VERIFY(result == vk::Result::eSuccess);
-    }
+    //Allocate Graphics Command Buffer
+    vkUtil::allocateCommandBuffers(device, cmd_pool, swapchainImageCount, buffers.get());
 
     if (separate_present_queue) {
-        auto const cmd_pool_info =
-            vk::CommandPoolCreateInfo().setQueueFamilyIndex(
-                present_queue_family_index);
 
-        result = device.createCommandPool(&cmd_pool_info, nullptr,
-            &present_cmd_pool);
-        VERIFY(result == vk::Result::eSuccess);
+        //Create Present Command Pool
+        vkUtil::createCommandPool(device, present_queue_family_index, present_cmd_pool);
+        //Allocate Present Command Buffer
+        vkUtil::allocateCommandBuffersForPresent(
+            device, present_cmd_pool, swapchainImageCount,
+            graphics_queue_family_index, present_queue_family_index, buffers.get());
 
-        auto const cmd = vk::CommandBufferAllocateInfo()
-            .setCommandPool(present_cmd_pool)
-            .setLevel(vk::CommandBufferLevel::ePrimary)
-            .setCommandBufferCount(1);
-
-        for (uint32_t i = 0; i < swapchainImageCount; i++) {
-            result = device.allocateCommandBuffers(
-                &cmd, &buffers[i].graphics_to_present_cmd);
-            VERIFY(result == vk::Result::eSuccess);
-
-            build_image_ownership_cmd(i);
-        }
     }
 
     prepare_descriptor_pool();

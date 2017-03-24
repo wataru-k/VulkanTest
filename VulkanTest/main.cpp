@@ -23,10 +23,10 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR pCmdLine,
 
     demo.init(args.argc(), args.argv(), APP_SHORT_NAME);
 
-
     if (!glfw.initilize()) {
         return 1;
     }
+
     if (!glfw.createWindow(512, 512, APP_SHORT_NAME)) {
         return 2;
     }

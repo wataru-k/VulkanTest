@@ -8,10 +8,17 @@
 #include "linmath.h"
 
 
-//Valkan関連の便利関数。
+typedef struct {
+    vk::Image image;
+    vk::CommandBuffer cmd;
+    vk::CommandBuffer graphics_to_present_cmd;
+    vk::ImageView view;
+} SwapchainBuffers;
+
+
+//Utility以前の状態。Valkan関連の処理を部分切り出し中。
 namespace vkUtil {
     
-
     //ValidationLayerを調べる。
     //instance_validation_layers_alt1を探して見つかれば成功。もし見つからなければ、
     //instance_validation_layers_alt2を探して見つかれば成功。
@@ -109,5 +116,44 @@ namespace vkUtil {
         vk::Format &out_format,
         vk::ColorSpaceKHR &out_color_space);
 
+    //デバイスからフレームラグ数のフェンスと3種のセマフォを生成する
+    void createFencesAndSemaphores(
+        vk::Device &in_device,
+        int in_frame_lag,
+        bool in_separate_present_queue,
+        vk::Fence *out_fences,
+        vk::Semaphore *out_semaphoresImageAcquired,
+        vk::Semaphore *out_semaphoresDrawComplete,
+        vk::Semaphore *out_semaphoresImageOwnershop
+        );
+
+
+    void createCommandPool(
+        vk::Device &in_device,
+        uint32_t in_queue_family_index,
+        vk::CommandPool &out_cmd_pool);
+
+
+    void allocateCommandBuffers(
+        vk::Device &in_device,
+        vk::CommandPool &in_cmd_pool,
+        int in_swap_chain_image_count,
+        SwapchainBuffers *out_swap_chain_buffers
+        );
+
+    void build_image_ownership_cmd(
+        uint32_t in_graphic_queue_family_index,
+        uint32_t in_present_queue_family_index,
+        SwapchainBuffers &out_swapchain_buffer
+        );
+
+    void allocateCommandBuffersForPresent(
+        vk::Device &in_device,
+        vk::CommandPool &in_cmd_pool,
+        int in_swap_chain_image_count,
+        uint32_t in_graphic_queue_family_index,
+        uint32_t in_present_queue_family_index,
+        SwapchainBuffers *out_swap_chain_buffers
+        );
 
 }

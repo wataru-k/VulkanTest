@@ -458,3 +458,138 @@ void vkUtil::getFormatAndColorSpace(
     }
     out_color_space = surfFormats[0].colorSpace;
 }
+
+
+void vkUtil::createFencesAndSemaphores(
+    vk::Device &in_device,
+    int in_frame_lag,
+    bool in_separate_present_queue,
+    vk::Fence *out_fences,
+    vk::Semaphore *out_semaphoresImageAcquired,
+    vk::Semaphore *out_semaphoresDrawComplete,
+    vk::Semaphore *out_semaphoresImageOwnershop
+    )
+{
+    // Create semaphores to synchronize acquiring presentable buffers before
+    // rendering and waiting for drawing to be complete before presenting
+    auto const semaphoreCreateInfo = vk::SemaphoreCreateInfo();
+
+    // Create fences that we can use to throttle if we get too far
+    // ahead of the image presents
+    auto const fenceCreateInfo = vk::FenceCreateInfo().setFlags(vk::FenceCreateFlagBits::eSignaled);
+
+    for (uint32_t i = 0; i < in_frame_lag; i++) {
+        
+        in_device.createFence(&fenceCreateInfo, nullptr, &out_fences[i]);
+
+        auto result = in_device.createSemaphore(&semaphoreCreateInfo, nullptr,
+            &out_semaphoresImageAcquired[i]);
+        VERIFY(result == vk::Result::eSuccess);
+
+        result = in_device.createSemaphore(&semaphoreCreateInfo, nullptr,
+            &out_semaphoresDrawComplete[i]);
+        VERIFY(result == vk::Result::eSuccess);
+
+        if (in_separate_present_queue) {
+            result = in_device.createSemaphore(&semaphoreCreateInfo, nullptr,
+                &out_semaphoresImageOwnershop[i]);
+            VERIFY(result == vk::Result::eSuccess);
+        }
+    }
+}
+
+
+void vkUtil::createCommandPool(
+    vk::Device &in_device,
+    uint32_t in_queue_family_index,
+    vk::CommandPool &out_cmd_pool
+    )
+{
+    auto const cmd_pool_info = vk::CommandPoolCreateInfo().setQueueFamilyIndex(in_queue_family_index);
+    auto result = in_device.createCommandPool(&cmd_pool_info, nullptr, &out_cmd_pool);
+    VERIFY(result == vk::Result::eSuccess);
+}
+
+void vkUtil::allocateCommandBuffers(
+    vk::Device &in_device,
+    vk::CommandPool &in_cmd_pool,
+    int in_swap_chain_image_count,
+    SwapchainBuffers *out_swap_chain_buffers
+    )
+{
+    vk::Result result;
+
+    auto const cbAllocInfo = vk::CommandBufferAllocateInfo()
+        .setCommandPool(in_cmd_pool)
+        .setLevel(vk::CommandBufferLevel::ePrimary)
+        .setCommandBufferCount(1);
+
+    for (uint32_t i = 0; i < in_swap_chain_image_count; ++i) {
+        result = in_device.allocateCommandBuffers(&cbAllocInfo, &out_swap_chain_buffers[i].cmd);
+        VERIFY(result == vk::Result::eSuccess);
+    }
+}
+
+
+void vkUtil::build_image_ownership_cmd(
+    uint32_t in_graphic_queue_family_index,
+    uint32_t in_present_queue_family_index,
+    SwapchainBuffers &out_swapchain_buffer
+    )
+{
+    auto const cmbuf_begin_info = vk::CommandBufferBeginInfo().setFlags(
+        vk::CommandBufferUsageFlagBits::eSimultaneousUse);
+
+    auto result = out_swapchain_buffer.graphics_to_present_cmd.begin(&cmbuf_begin_info);
+    VERIFY(result == vk::Result::eSuccess);
+
+    auto const image_ownership_barrier =
+        vk::ImageMemoryBarrier()
+        .setSrcAccessMask(vk::AccessFlags())
+        .setDstAccessMask(vk::AccessFlagBits::eColorAttachmentWrite)
+        .setOldLayout(vk::ImageLayout::ePresentSrcKHR)
+        .setNewLayout(vk::ImageLayout::ePresentSrcKHR)
+        .setSrcQueueFamilyIndex(in_graphic_queue_family_index)
+        .setDstQueueFamilyIndex(in_present_queue_family_index)
+        .setImage(out_swapchain_buffer.image)
+        .setSubresourceRange(vk::ImageSubresourceRange(
+            vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1));
+
+    out_swapchain_buffer.graphics_to_present_cmd.pipelineBarrier(
+        vk::PipelineStageFlagBits::eColorAttachmentOutput,
+        vk::PipelineStageFlagBits::eColorAttachmentOutput,
+        vk::DependencyFlagBits(), 0, nullptr, 0, nullptr, 1,
+        &image_ownership_barrier);
+
+    result = out_swapchain_buffer.graphics_to_present_cmd.end();
+    VERIFY(result == vk::Result::eSuccess);
+
+}
+
+
+void vkUtil::allocateCommandBuffersForPresent(
+    vk::Device &in_device,
+    vk::CommandPool &in_cmd_pool,
+    int in_swap_chain_image_count,
+    uint32_t in_graphic_queue_family_index,
+    uint32_t in_present_queue_family_index,
+    SwapchainBuffers *out_swap_chain_buffers
+    )
+{
+    vk::Result result;
+
+    auto const cbAllocInfo = vk::CommandBufferAllocateInfo()
+        .setCommandPool(in_cmd_pool)
+        .setLevel(vk::CommandBufferLevel::ePrimary)
+        .setCommandBufferCount(1);
+
+    for (uint32_t i = 0; i < in_swap_chain_image_count; ++i) {
+        result = in_device.allocateCommandBuffers(&cbAllocInfo, &out_swap_chain_buffers[i].graphics_to_present_cmd);
+        VERIFY(result == vk::Result::eSuccess);
+
+        vkUtil::build_image_ownership_cmd(
+            in_graphic_queue_family_index,
+            in_present_queue_family_index,
+            out_swap_chain_buffers[i]);
+    }
+}

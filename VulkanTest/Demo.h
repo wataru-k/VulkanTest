@@ -7,10 +7,9 @@
 #include <csignal>
 #include <memory>
 
-#define VULKAN_HPP_NO_EXCEPTIONS
-#include <vulkan/vulkan.hpp>
-#include <vulkan/vk_sdk_platform.h>
-#include "linmath.h"
+
+#include "util_valkan.h"
+
 
 struct vkcube_vs_uniform {
     // Must start with MVP
@@ -25,13 +24,6 @@ struct vktexcube_vs_uniform {
     float position[12 * 3][4];
     float attr[12 * 3][4];
 };
-
-typedef struct {
-    vk::Image image;
-    vk::CommandBuffer cmd;
-    vk::CommandBuffer graphics_to_present_cmd;
-    vk::ImageView view;
-} SwapchainBuffers;
 
 struct texture_object {
     vk::Sampler sampler;
@@ -65,13 +57,15 @@ public:
     //#2
     void init_vk_swapchain(HINSTANCE inst, HWND wnd);
 
+    //#3
+    void prepare();
+
 private:
 
     //call from init()
     void init_vk();
 
 public:
-    void build_image_ownership_cmd(uint32_t const &i);
 
     void cleanup();
 
@@ -83,7 +77,6 @@ public:
 
     void flush_init_cmd();
 
-    void prepare();
 
     void prepare_buffers();
 
@@ -170,14 +163,18 @@ private:
     vk::Format format;
     vk::ColorSpaceKHR color_space;
 
+    vk::Fence fences[FRAME_LAG];
+    vk::Semaphore image_acquired_semaphores[FRAME_LAG];
+    vk::Semaphore draw_complete_semaphores[FRAME_LAG];
+    vk::Semaphore image_ownership_semaphores[FRAME_LAG];
+
+    vk::CommandPool cmd_pool;
+    vk::CommandPool present_cmd_pool;
 
 
     bool prepared;
     bool use_staging_buffer;
 
-    vk::Semaphore image_acquired_semaphores[FRAME_LAG];
-    vk::Semaphore draw_complete_semaphores[FRAME_LAG];
-    vk::Semaphore image_ownership_semaphores[FRAME_LAG];
     vk::PhysicalDeviceProperties gpu_props;
     vk::PhysicalDeviceMemoryProperties memory_properties;
 
@@ -188,11 +185,8 @@ private:
     uint32_t swapchainImageCount;
     vk::SwapchainKHR swapchain;
     std::unique_ptr<SwapchainBuffers[]> buffers;
-    vk::Fence fences[FRAME_LAG];
     uint32_t frame_index;
 
-    vk::CommandPool cmd_pool;
-    vk::CommandPool present_cmd_pool;
 
     struct {
         vk::Format format;
