@@ -262,7 +262,9 @@ void Demo::init_vk_swapchain(HINSTANCE hinst, HWND hwnd)
     window = hwnd;
 
     //Create Win32Surface
+    //TODO:インスタンスクラス行き？
     //TODO: class and method : surface = inst->func(hinst, hwnd)
+    //SurfaceのサイズはWindowから取得される？
     vkUtil::createWin32Surface(inst, connection_, window, surface);
 
     //Find graphics and present queue family index
@@ -595,6 +597,9 @@ void Demo::flush_init_cmd()
 }
 
 
+//
+//  バッファ関連の初期化(ウインドウサイズに依存)
+//
 void Demo::prepare()
 {
     //Create Graphics Command Pool
@@ -613,14 +618,13 @@ void Demo::prepare()
     vkUtil::allocateCommandBuffers(device, cmd_pool, swapchainImageCount, buffers.get());
 
     if (separate_present_queue) {
-
         //Create Present Command Pool
         vkUtil::createCommandPool(device, present_queue_family_index, present_cmd_pool);
+
         //Allocate Present Command Buffer
         vkUtil::allocateCommandBuffersForPresent(
             device, present_cmd_pool, swapchainImageCount,
             graphics_queue_family_index, present_queue_family_index, buffers.get());
-
     }
 
     prepare_descriptor_pool();
@@ -645,165 +649,45 @@ void Demo::prepare()
 
 void Demo::prepare_buffers() 
 {
-    vk::SwapchainKHR oldSwapchain = swapchain;
 
-    // Check the surface capabilities and formats
+
+    //GPUとサーフェイスからCapabiliesを取得。
     vk::SurfaceCapabilitiesKHR surfCapabilities;
-    auto result = gpu.getSurfaceCapabilitiesKHR(surface, &surfCapabilities);
-    VERIFY(result == vk::Result::eSuccess);
+    vkUtil::getSurfaceCapabilitiesKHR(gpu, surface, surfCapabilities);
 
-    uint32_t presentModeCount;
-    result =
-        gpu.getSurfacePresentModesKHR(surface, &presentModeCount, nullptr);
-    VERIFY(result == vk::Result::eSuccess);
+    //プレゼントモードを選択する。
+    vk::PresentModeKHR swapchainPresentMode = vkUtil::selectPresentMode(gpu, surface);
 
-    std::unique_ptr<vk::PresentModeKHR[]> presentModes(
-        new vk::PresentModeKHR[presentModeCount]);
-    result = gpu.getSurfacePresentModesKHR(surface, &presentModeCount,
-        presentModes.get());
-    VERIFY(result == vk::Result::eSuccess);
-
+    //SwapChainのサーフェイスのサイズを決定する。
+    //Capabilitiesに定義されていればそちらを、
+    //未定義ならcurrent(desired)のwidth,heightを採用する。
+    //NOTE:サーフェイスサイズはWindowサイズからやってきているので、結局どちらもユーザが指定している。
     vk::Extent2D swapchainExtent;
-    // width and height are either both -1, or both not -1.
-    if (surfCapabilities.currentExtent.width == (uint32_t)-1) {
-        // If the surface size is undefined, the size is set to
-        // the size of the images requested.
-        swapchainExtent.width = width_;
-        swapchainExtent.height = height_;
-    }
-    else {
-        // If the surface size is defined, the swap chain size must match
-        swapchainExtent = surfCapabilities.currentExtent;
-        width_ = surfCapabilities.currentExtent.width;
-        height_ = surfCapabilities.currentExtent.height;
-    }
+    vkUtil::determineSwapChainExtent(surfCapabilities, width_, height_, swapchainExtent);
 
-    // The FIFO present mode is guaranteed by the spec to be supported
-    // and to have no tearing.  It's a great default present mode to use.
-    vk::PresentModeKHR swapchainPresentMode = vk::PresentModeKHR::eFifo;
+    //SwapChainを(再)生成する。
+    vkUtil::createSwapchainKHR(device, surfCapabilities, swapchainPresentMode, surface, swapchainExtent, format, color_space, swapchain);
 
-    //  There are times when you may wish to use another present mode.  The
-    //  following code shows how to select them, and the comments provide some
-    //  reasons you may wish to use them.
-    //
-    // It should be noted that Vulkan 1.0 doesn't provide a method for
-    // synchronizing rendering with the presentation engine's display.  There
-    // is a method provided for throttling rendering with the display, but
-    // there are some presentation engines for which this method will not work.
-    // If an application doesn't throttle its rendering, and if it renders much
-    // faster than the refresh rate of the display, this can waste power on
-    // mobile devices.  That is because power is being spent rendering images
-    // that may never be seen.
-    //#define DESIRE_VK_PRESENT_MODE_IMMEDIATE_KHR
-    //#define DESIRE_VK_PRESENT_MODE_MAILBOX_KHR
-    //#define DESIRE_VK_PRESENT_MODE_FIFO_RELAXED_KHR
-#if defined(DESIRE_VK_PRESENT_MODE_IMMEDIATE_KHR)
-    // VK_PRESENT_MODE_IMMEDIATE_KHR is for applications that don't care
-    // about
-    // tearing, or have some way of synchronizing their rendering with the
-    // display.
-    for (size_t i = 0; i < presentModeCount; ++i) {
-        if (presentModes[i] == vk::PresentModeKHR::eImmediate) {
-            swapchainPresentMode = vk::PresentModeKHR::eImmediate;
-            break;
-        }
-    }
-#elif defined(DESIRE_VK_PRESENT_MODE_MAILBOX_KHR)
-    // VK_PRESENT_MODE_MAILBOX_KHR may be useful for applications that
-    // generally render a new presentable image every refresh cycle, but are
-    // occasionally early.  In this case, the application wants the new
-    // image
-    // to be displayed instead of the previously-queued-for-presentation
-    // image
-    // that has not yet been displayed.
-    for (size_t i = 0; i < presentModeCount; ++i) {
-        if (presentModes[i] == vk::PresentModeKHR::eMailbox) {
-            swapchainPresentMode = vk::PresentModeKHR::eMailbox;
-            break;
-        }
-    }
-#elif defined(DESIRE_VK_PRESENT_MODE_FIFO_RELAXED_KHR)
-    // VK_PRESENT_MODE_FIFO_RELAXED_KHR is for applications that generally
-    // render a new presentable image every refresh cycle, but are
-    // occasionally
-    // late.  In this case (perhaps because of stuttering/latency concerns),
-    // the application wants the late image to be immediately displayed,
-    // even
-    // though that may mean some tearing.
-    for (size_t i = 0; i < presentModeCount; ++i) {
-        if (presentModes[i] == vk::PresentModeKHR::eFifoRelaxed) {
-            swapchainPresentMode = vk::PresentModeKHR::eFifoRelaxed;
-            break;
-        }
-    }
-#endif
 
-    // Determine the number of VkImage's to use in the swap chain (we desire
-    // to
-    // own only 1 image at a time, besides the images being displayed and
-    // queued for display):
-    uint32_t desiredNumberOfSwapchainImages =
-        surfCapabilities.minImageCount + 1;
-    // If maxImageCount is 0, we can ask for as many images as we want,
-    // otherwise
-    // we're limited to maxImageCount
-    if ((surfCapabilities.maxImageCount > 0) &&
-        (desiredNumberOfSwapchainImages > surfCapabilities.maxImageCount)) {
-        // Application must settle for fewer images than desired:
-        desiredNumberOfSwapchainImages = surfCapabilities.maxImageCount;
-    }
 
-    vk::SurfaceTransformFlagBitsKHR preTransform;
-    if (surfCapabilities.supportedTransforms &
-        vk::SurfaceTransformFlagBitsKHR::eIdentity) {
-        preTransform = vk::SurfaceTransformFlagBitsKHR::eIdentity;
-    }
-    else {
-        preTransform = surfCapabilities.currentTransform;
-    }
 
-    auto const swapchain_ci =
-        vk::SwapchainCreateInfoKHR()
-        .setSurface(surface)
-        .setMinImageCount(desiredNumberOfSwapchainImages)
-        .setImageFormat(format)
-        .setImageColorSpace(color_space)
-        .setImageExtent({ swapchainExtent.width, swapchainExtent.height })
-        .setImageArrayLayers(1)
-        .setImageUsage(vk::ImageUsageFlagBits::eColorAttachment)
-        .setImageSharingMode(vk::SharingMode::eExclusive)
-        .setQueueFamilyIndexCount(0)
-        .setPQueueFamilyIndices(nullptr)
-        .setPreTransform(preTransform)
-        .setCompositeAlpha(vk::CompositeAlphaFlagBitsKHR::eOpaque)
-        .setPresentMode(swapchainPresentMode)
-        .setClipped(true)
-        .setOldSwapchain(oldSwapchain);
+    vk::Result result;
 
-    result = device.createSwapchainKHR(&swapchain_ci, nullptr, &swapchain);
+    //スワップチェインイメージ数取得。
+    result = device.getSwapchainImagesKHR(swapchain, &swapchainImageCount, nullptr);
     VERIFY(result == vk::Result::eSuccess);
 
-    // If we just re-created an existing swapchain, we should destroy the
-    // old
-    // swapchain at this point.
-    // Note: destroying the swapchain also cleans up all its associated
-    // presentable images once the platform is done with them.
-    if (oldSwapchain) {
-        device.destroySwapchainKHR(oldSwapchain, nullptr);
-    }
+    std::unique_ptr<vk::Image[]> swapchainImages(new vk::Image[swapchainImageCount]);
 
-    result = device.getSwapchainImagesKHR(swapchain, &swapchainImageCount,
-        nullptr);
+    //スワップチェインイメージ取得。
+    result = device.getSwapchainImagesKHR(swapchain, &swapchainImageCount, swapchainImages.get());
     VERIFY(result == vk::Result::eSuccess);
 
-    std::unique_ptr<vk::Image[]> swapchainImages(
-        new vk::Image[swapchainImageCount]);
-    result = device.getSwapchainImagesKHR(swapchain, &swapchainImageCount,
-        swapchainImages.get());
-    VERIFY(result == vk::Result::eSuccess);
 
+    //スワップチェインバッファを新しく作り直す。
     buffers.reset(new SwapchainBuffers[swapchainImageCount]);
 
+    //スワップチェインイメージをImageViewに渡してバッファに接続する。
     for (uint32_t i = 0; i < swapchainImageCount; ++i) {
         auto const color_image_view =
             vk::ImageViewCreateInfo()

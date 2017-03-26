@@ -65,6 +65,9 @@ private:
     //call from init()
     void init_vk();
 
+    //call from prepare()
+    void prepare_buffers();
+
 public:
 
     void cleanup();
@@ -78,7 +81,6 @@ public:
     void flush_init_cmd();
 
 
-    void prepare_buffers();
 
     void prepare_cube_data_buffer();
 
@@ -138,12 +140,12 @@ private:
     char name_[APP_NAME_STR_LEN]; // Name to put on the window/icon
 
     //Validation
-    bool validate_; //valiationするか否か。
+    bool validate_; //valiationするか否か（Debug時ON）。
     uint32_t enabled_layer_count_; //有効化レイヤー数。
     char const *enabled_layers_[64]; //有効化レイヤー名の配列。
 
-    uint32_t enabled_extension_count;
-    char const *extension_names[64];
+    uint32_t enabled_extension_count; //有効化する拡張機能数。
+    char const *extension_names[64]; //拡張機能名バッファ。
 
     uint32_t queue_family_count;
     std::unique_ptr<vk::QueueFamilyProperties[]> queue_props;

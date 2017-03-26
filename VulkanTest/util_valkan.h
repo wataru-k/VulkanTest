@@ -62,6 +62,7 @@ namespace vkUtil {
         const char *_extension_names[64]);
 
 
+    //TODO:インスタンスクラス行き？
     //(Win32)サーフェイスの生成。
     void createWin32Surface(vk::Instance &inst, HINSTANCE hinst, HWND hwnd, vk::SurfaceKHR &out_surface);
 
@@ -108,8 +109,11 @@ namespace vkUtil {
         vk::Queue &out_graphics_queue,
         vk::Queue &out_present_queue);
 
-    //サーフェスフォーマットを取得し
-    // フォーマットとカラースペースを取得。
+
+
+    //TODO: Surfaceクラス行き？
+    //GPUとサーフェイスから
+    //サーフェスフォーマットとフォーマットとカラースペースを取得。
     void getFormatAndColorSpace(
         vk::PhysicalDevice &in_gpu,
         vk::SurfaceKHR &in_surface,
@@ -155,5 +159,50 @@ namespace vkUtil {
         uint32_t in_present_queue_family_index,
         SwapchainBuffers *out_swap_chain_buffers
         );
+
+    //TODO: Surfaceクラス行き？
+    //GPU,サーフェイスからプレゼントモードのリストを取得。
+    void getSurfacePresentModesKHR(
+        vk::PhysicalDevice &in_gpu,
+        vk::SurfaceKHR &in_surface,
+        std::vector<vk::PresentModeKHR> &out_presentModes);
+
+    //TODO: Surfaceクラス行き？
+    //GPU,サーフェイスからケイパビリティ情報を取得。
+    void getSurfaceCapabilitiesKHR(
+        vk::PhysicalDevice &in_gpu,
+        vk::SurfaceKHR &in_surface,
+        vk::SurfaceCapabilitiesKHR &out);
+
+
+    //GPU,サーフェイスからプレゼントモードを選択。
+    //４種類あるが、現状はデフォルトはFIFOモード。
+    vk::PresentModeKHR selectPresentMode(
+        vk::PhysicalDevice &in_gpu,
+        vk::SurfaceKHR &in_surface);
+
+    //SwapChainのサーフェイスのサイズを決定する。
+    //Capabilitiesに定義されていればそちらを、
+    //未定義ならcurrent(desired)のwidth,heightを採用する。
+    void determineSwapChainExtent(
+        vk::SurfaceCapabilitiesKHR &in_surfCapabilities, 
+        uint32_t &io_current_width,
+        uint32_t &io_current_height,
+        vk::Extent2D &out_swapchainExtent);
+
+    //SwapChainイメージの数を決定する。
+    uint32_t determineDesiredNumberOfSwapchainImages(
+        vk::SurfaceCapabilitiesKHR &in_surfCapabilities);
+
+
+    void createSwapchainKHR(
+        vk::Device &in_device,
+        vk::SurfaceCapabilitiesKHR &surfCapabilities,
+        vk::PresentModeKHR swapchainPresentMode,
+        vk::SurfaceKHR &in_surface,
+        vk::Extent2D swapchainExtent,
+        vk::Format format,
+        vk::ColorSpaceKHR color_space,
+        vk::SwapchainKHR &io_swapchain);
 
 }
