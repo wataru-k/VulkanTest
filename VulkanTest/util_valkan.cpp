@@ -795,3 +795,44 @@ void vkUtil::createSwapchainKHR(
         in_device.destroySwapchainKHR(oldSwapchain, nullptr);
     }
 }
+
+
+void vkUtil::createSwapchainBuffersAndImages(
+    vk::Device &in_device,
+    vk::Format in_format,
+    uint32_t in_swapchainImageCount,
+    vk::SwapchainKHR &in_swapchain,
+    std::unique_ptr<SwapchainBuffers[]> &out_swapChainBuffers)
+{
+    //スワップチェインイメージ取得。
+    std::unique_ptr<vk::Image[]> swapchainImages(new vk::Image[in_swapchainImageCount]);
+    auto result = in_device.getSwapchainImagesKHR(in_swapchain, &in_swapchainImageCount, swapchainImages.get());
+    VERIFY(result == vk::Result::eSuccess);
+
+    //スワップチェインバッファを新しく作り直す。
+    out_swapChainBuffers.reset(new SwapchainBuffers[in_swapchainImageCount]);
+
+    //スワップチェインイメージを新しく生成したイメージビューに渡しバッファに接続する。
+    for (uint32_t i = 0; i < in_swapchainImageCount; ++i) {
+    
+        auto const color_image_view =
+            vk::ImageViewCreateInfo()
+            .setImage(swapchainImages[i])
+            .setViewType(vk::ImageViewType::e2D)
+            .setFormat(in_format)
+            .setSubresourceRange(vk::ImageSubresourceRange(
+                vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1));
+
+        out_swapChainBuffers[i].image = swapchainImages[i];
+
+        auto result = in_device.createImageView(
+            &color_image_view, 
+            nullptr,
+            &out_swapChainBuffers[i].view);
+
+        VERIFY(result == vk::Result::eSuccess);
+    }
+
+
+
+}

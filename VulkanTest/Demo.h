@@ -180,7 +180,6 @@ private:
     vk::PhysicalDeviceProperties gpu_props;
     vk::PhysicalDeviceMemoryProperties memory_properties;
 
-
     uint32_t width_;
     uint32_t height_;
 

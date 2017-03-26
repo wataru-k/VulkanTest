@@ -647,10 +647,9 @@ void Demo::prepare()
     prepared = true;
 }
 
+
 void Demo::prepare_buffers() 
 {
-
-
     //GPUとサーフェイスからCapabiliesを取得。
     vk::SurfaceCapabilitiesKHR surfCapabilities;
     vkUtil::getSurfaceCapabilitiesKHR(gpu, surface, surfCapabilities);
@@ -669,40 +668,13 @@ void Demo::prepare_buffers()
     vkUtil::createSwapchainKHR(device, surfCapabilities, swapchainPresentMode, surface, swapchainExtent, format, color_space, swapchain);
 
 
-
-
-    vk::Result result;
-
     //スワップチェインイメージ数取得。
-    result = device.getSwapchainImagesKHR(swapchain, &swapchainImageCount, nullptr);
-    VERIFY(result == vk::Result::eSuccess);
-
-    std::unique_ptr<vk::Image[]> swapchainImages(new vk::Image[swapchainImageCount]);
-
-    //スワップチェインイメージ取得。
-    result = device.getSwapchainImagesKHR(swapchain, &swapchainImageCount, swapchainImages.get());
+    auto result = device.getSwapchainImagesKHR(swapchain, &swapchainImageCount, nullptr);
     VERIFY(result == vk::Result::eSuccess);
 
 
-    //スワップチェインバッファを新しく作り直す。
-    buffers.reset(new SwapchainBuffers[swapchainImageCount]);
-
-    //スワップチェインイメージをImageViewに渡してバッファに接続する。
-    for (uint32_t i = 0; i < swapchainImageCount; ++i) {
-        auto const color_image_view =
-            vk::ImageViewCreateInfo()
-            .setImage(swapchainImages[i])
-            .setViewType(vk::ImageViewType::e2D)
-            .setFormat(format)
-            .setSubresourceRange(vk::ImageSubresourceRange(
-                vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1));
-
-        buffers[i].image = swapchainImages[i];
-
-        result = device.createImageView(&color_image_view, nullptr,
-            &buffers[i].view);
-        VERIFY(result == vk::Result::eSuccess);
-    }
+    //スワップチェインバッファとイメージを生成する。
+    vkUtil::createSwapchainBuffersAndImages(device, format, swapchainImageCount, swapchain, buffers);
 }
 
 #include "cube.h"

@@ -205,4 +205,14 @@ namespace vkUtil {
         vk::ColorSpaceKHR color_space,
         vk::SwapchainKHR &io_swapchain);
 
+
+    //スワップチェインバッファとイメージを生成する。
+    void createSwapchainBuffersAndImages(
+        vk::Device &in_device,
+        vk::Format in_format,
+        uint32_t in_swapchainImageCount,
+        vk::SwapchainKHR &in_swapchain,
+        std::unique_ptr<SwapchainBuffers[]> &out_swapChainBuffers
+        );
+
 }
